@@ -37,9 +37,18 @@ jobs:
       - name: Package installers (electron-builder)
         run: npx electron-builder --publish never
         env:
-          # No code-signing certificates in CI; produce unsigned artifacts.
-          CSC_IDENTITY_AUTO_DISCOVERY: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing — active only when the matching repo secrets exist;
+          # otherwise these resolve to empty and electron-builder produces
+          # unsigned artifacts. macOS uses MAC_CSC_*, Windows uses WIN_CSC_*.
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || matrix.os == 'windows-latest' && secrets.WIN_CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || matrix.os == 'windows-latest' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+          # Skip keychain auto-discovery unless a macOS cert is provided.
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CSC_LINK != '' && 'true' || 'false' }}
+          # macOS notarization (consumed by build/notarize.cjs; skipped if unset).
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

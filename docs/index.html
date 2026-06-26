@@ -419,6 +419,7 @@
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
           <a href="#mcp">MCP</a>
+          <a href="#install">Install</a>
           <a href="#start">Get started</a>
         </div>
         <a class="btn btn-ghost" href="https://github.com/gediminasurvila/video-editor-ai-electron"
@@ -557,10 +558,62 @@
       </div>
     </section>
 
+    <section id="install">
+      <div class="wrap">
+        <span class="eyebrow">Install</span>
+        <h2>Download &amp; open the app</h2>
+        <p class="lead">
+          Grab the installer for your platform from the
+          <a href="https://github.com/gediminasurvila/video-editor-ai-electron/releases/latest" style="color: var(--accent)">latest release</a>. The current builds are
+          <b>unsigned</b>, so each OS shows a one-time warning on first launch — here's how to get
+          past it.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <div class="ico">🍎</div>
+            <h3>macOS</h3>
+            <p>
+              Download the DMG for your chip — <b>arm64</b> (Apple Silicon) or <b>x64</b> (Intel) —
+              open it and drag <b>Video AI</b> to Applications. Then:
+            </p>
+            <p style="margin-top: 10px">
+              <b>1.</b> Right-click the app → <b>Open</b> → <b>Open</b>.<br />
+              <b>2.</b> If it says <i>“damaged / can't be opened”</i>, clear the download quarantine:
+            </p>
+            <pre class="code" style="margin-top: 12px">xattr -dr com.apple.quarantine \
+  <span class="s">"/Applications/Video AI.app"</span></pre>
+          </div>
+          <div class="card">
+            <div class="ico">🪟</div>
+            <h3>Windows</h3>
+            <p>Download and run <code>Video AI-…-Setup-x64.exe</code>.</p>
+            <p style="margin-top: 10px">
+              If SmartScreen shows <i>“Windows protected your PC”</i>, click
+              <b>More info</b> → <b>Run anyway</b>, then follow the installer.
+            </p>
+          </div>
+          <div class="card">
+            <div class="ico">🐧</div>
+            <h3>Linux</h3>
+            <p><b>AppImage</b> — make it executable and run:</p>
+            <pre class="code" style="margin-top: 10px">chmod +x Video*.AppImage
+./Video*.AppImage <span class="c"># needs libfuse2</span></pre>
+            <p style="margin-top: 10px"><b>.deb</b> — install with apt:</p>
+            <pre class="code" style="margin-top: 10px">sudo apt install ./Video*.deb</pre>
+          </div>
+        </div>
+        <p class="lead" style="margin-top: 24px; font-size: 15px">
+          These warnings appear only because the binaries aren't code-signed yet — the app itself is
+          safe and open source. Signed &amp; notarized builds are on the
+          <a href="#" onclick="document.querySelector('#start').scrollIntoView();return false" style="color: var(--accent)">roadmap</a>.
+        </p>
+      </div>
+    </section>
+
     <section id="start">
       <div class="wrap">
         <span class="eyebrow">Get started</span>
-        <h2>Run it in a minute</h2>
+        <h2>Run it from source</h2>
         <pre class="code"><span class="c"># Requires Node 20+ and ffmpeg on your PATH</span>
 <span class="k">git</span> clone git@github.com:gediminasurvila/video-editor-ai-electron.git
 <span class="k">cd</span> video-editor-ai-electron

@@ -14,6 +14,8 @@ extraResources:
 asarUnpack:
   - node_modules/ffmpeg-static/**/*
   - node_modules/ffprobe-static/**/*
+# Notarize after signing (the hook no-ops unless APPLE_* secrets are set).
+afterSign: build/notarize.cjs
 win:
   icon: build/icon.ico
   target:
@@ -30,6 +32,12 @@ mac:
     - target: dmg
       arch: [x64, arm64]
   category: public.app-category.video
+  # Hardened runtime + entitlements are required for notarization. They are
+  # harmless for unsigned/ad-hoc builds, so they stay on unconditionally.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
   artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
   icon: build/icons

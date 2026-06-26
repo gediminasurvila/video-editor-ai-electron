@@ -1,6 +1,6 @@
 {
   "name": "video-ai",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Cross-platform AI-native video editor (Electron)",
   "author": {
     "name": "Gediminas Survila",
@@ -35,6 +35,7 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@electron/notarize": "^2.5.0",
     "@types/node": "^22.10.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

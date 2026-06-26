@@ -176,23 +176,59 @@ curl -s -X POST http://127.0.0.1:19789/mcp \
 
 **Available tools:** `import_media`, `create_sequence`, `add_track`, `add_clip`, `split_clip`, `trim_clip`, `move_clip`, `set_property`, `delete_clip`, `get_timeline_state`, `export`.
 
+## Installing the app (from a release)
+
+Download the installer for your platform from the [latest release](https://github.com/gediminasurvila/video-editor-ai-electron/releases/latest). FFmpeg is bundled — nothing else to install. The current builds are **unsigned**, so each OS shows a one-time warning on first launch:
+
+**macOS** — open the DMG for your chip (`arm64` = Apple Silicon, `x64` = Intel) and drag **Video AI** to Applications. Then:
+1. Right-click the app → **Open** → **Open**.
+2. If it reports *"damaged / can't be opened"*, clear the download quarantine flag:
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/Video AI.app"
+   ```
+
+**Windows** — run `Video AI-…-Setup-x64.exe`. If SmartScreen appears, click **More info → Run anyway**.
+
+**Linux**
+```bash
+chmod +x 'Video AI-…-x86_64.AppImage' && ./'Video AI-…-x86_64.AppImage'   # needs libfuse2
+# or
+sudo apt install ./'Video AI-…-amd64.deb'
+```
+
 ## Packaging desktop builds
 
 ```bash
-npm run package:mac    # .dmg
+npm run package:mac    # .dmg (x64 + arm64)
 npm run package:win    # NSIS installer
 npm run package:linux  # AppImage + .deb
 ```
 
-For packaged builds, place static FFmpeg binaries under `resources/ffmpeg/<platform>/`:
+FFmpeg/ffprobe are bundled automatically via `ffmpeg-static` / `ffprobe-static` (unpacked from the asar so they stay executable) — no manual binaries needed. In development the app uses the same bundled binaries, falling back to `ffmpeg`/`ffprobe` on `PATH`; override with `FFMPEG_PATH` / `FFPROBE_PATH`.
 
-```
-resources/ffmpeg/mac/{ffmpeg,ffprobe}
-resources/ffmpeg/win/{ffmpeg.exe,ffprobe.exe}
-resources/ffmpeg/linux/{ffmpeg,ffprobe}
+Releases are built automatically: pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`, which builds installers on native Windows/macOS/Linux runners and attaches them to the GitHub Release.
+
+### Code signing & notarization
+
+The pipeline signs and notarizes **automatically when the relevant repo secrets are present**, and falls back to unsigned builds when they aren't (so it works out of the box). To enable trusted builds, add these secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Purpose |
+| --- | --- |
+| `MAC_CSC_LINK` | base64 of your Apple **Developer ID Application** cert (`.p12`) |
+| `MAC_CSC_KEY_PASSWORD` | password for that `.p12` |
+| `APPLE_ID` | Apple ID email (for notarization) |
+| `APPLE_APP_SPECIFIC_PASSWORD` | app-specific password for that Apple ID |
+| `APPLE_TEAM_ID` | your Apple Developer Team ID |
+| `WIN_CSC_LINK` | base64 of your Windows code-signing cert (`.pfx`) |
+| `WIN_CSC_KEY_PASSWORD` | password for that `.pfx` |
+
+```bash
+# Encode a certificate for the *_CSC_LINK secrets:
+base64 -i DeveloperID.p12 | pbcopy      # macOS
+base64 -w0 codesign.pfx                  # Linux
 ```
 
-(See `resources/ffmpeg/.gitkeep`.) In development the app falls back to `ffmpeg`/`ffprobe` on `PATH`. You can also override the paths with the `FFMPEG_PATH` / `FFPROBE_PATH` environment variables.
+macOS signing uses hardened runtime + `build/entitlements.mac.plist`; notarization runs via the `afterSign` hook (`build/notarize.cjs`), which skips automatically when the `APPLE_*` secrets are absent.
 
 ## Project file format
 
