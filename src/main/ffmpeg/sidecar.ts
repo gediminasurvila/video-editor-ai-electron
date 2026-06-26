@@ -1,0 +1,82 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import type { ProbeResult } from '@shared/ipc'
+
+const execFileAsync = promisify(execFile)
+
+/**
+ * Resolve the ffmpeg/ffprobe binaries. In development we fall back to the
+ * binaries on PATH; in a packaged build these are bundled under
+ * resources/ffmpeg/<platform> (wired up in electron-builder config).
+ */
+function binary(name: 'ffmpeg' | 'ffprobe'): string {
+  const fromEnv = process.env[name.toUpperCase() + '_PATH']
+  if (fromEnv) return fromEnv
+  return name
+}
+
+interface FfprobeStream {
+  codec_type: 'video' | 'audio'
+  codec_name?: string
+  width?: number
+  height?: number
+  avg_frame_rate?: string
+  duration?: string
+}
+
+interface FfprobeOutput {
+  streams: FfprobeStream[]
+  format: { duration?: string }
+}
+
+function parseFps(avg?: string): number {
+  if (!avg || avg === '0/0') return 0
+  const [num, den] = avg.split('/').map(Number)
+  if (!den) return 0
+  return num / den
+}
+
+export async function probeMedia(filePath: string): Promise<ProbeResult> {
+  const { stdout } = await execFileAsync(binary('ffprobe'), [
+    '-v',
+    'quiet',
+    '-print_format',
+    'json',
+    '-show_format',
+    '-show_streams',
+    filePath
+  ])
+  const data = JSON.parse(stdout) as FfprobeOutput
+  const video = data.streams.find((s) => s.codec_type === 'video')
+  const audio = data.streams.find((s) => s.codec_type === 'audio')
+  const duration = Number(data.format.duration ?? video?.duration ?? audio?.duration ?? 0)
+
+  return {
+    media: {
+      filePath,
+      duration: Number.isFinite(duration) ? duration : 0,
+      width: video?.width ?? 0,
+      height: video?.height ?? 0,
+      fps: parseFps(video?.avg_frame_rate),
+      hasAudio: Boolean(audio),
+      codec: video?.codec_name ?? audio?.codec_name
+    }
+  }
+}
+
+/**
+ * MVP export: re-encode the active sequence from source media using a simple
+ * edit-decision-list approach. A full compositor render path replaces this in a
+ * later milestone; for now we render the first video track sequentially with the
+ * filter graph so end-to-end export works.
+ */
+export async function runFfmpeg(args: string[], onProgress?: (line: string) => void): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = execFile(binary('ffmpeg'), args)
+    child.stderr?.on('data', (chunk: Buffer) => onProgress?.(chunk.toString()))
+    child.on('error', reject)
+    child.on('close', (code) =>
+      code === 0 ? resolve() : reject(new Error(`ffmpeg exited with code ${code}`))
+    )
+  })
+}

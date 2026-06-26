@@ -1,0 +1,5 @@
+# Place per-platform static binaries here for packaging:
+#   resources/ffmpeg/mac/{ffmpeg,ffprobe}
+#   resources/ffmpeg/win/{ffmpeg.exe,ffprobe.exe}
+#   resources/ffmpeg/linux/{ffmpeg,ffprobe}
+# In development the app falls back to ffmpeg/ffprobe on PATH.

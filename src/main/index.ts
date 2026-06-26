@@ -1,0 +1,118 @@
+import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
+import { IpcChannels, IpcEvents, type RunCommandResponse } from '@shared/ipc'
+import { probeMedia } from './ffmpeg/sidecar'
+import { loadProject, saveProject } from './project/io'
+import { exportSequence } from './export/render'
+import { CommandBridge } from './mcp/bridge'
+import { EditorMcpServer } from './mcp/server'
+import type { Project } from '@shared/schema'
+
+let mainWindow: BrowserWindow | null = null
+
+const bridge = new CommandBridge(() => mainWindow?.webContents ?? null)
+const mcp = new EditorMcpServer(bridge)
+
+function createWindow(): void {
+  mainWindow = new BrowserWindow({
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 640,
+    backgroundColor: '#0d0d10',
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.mjs'),
+      sandbox: false,
+      contextIsolation: true
+    }
+  })
+
+  mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  if (process.env['ELECTRON_RENDERER_URL']) {
+    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+function registerIpc(): void {
+  ipcMain.handle(IpcChannels.probeMedia, (_e, filePath: string) => probeMedia(filePath))
+
+  ipcMain.handle(IpcChannels.readMediaBytes, async (_e, filePath: string) => {
+    const buf = await readFile(filePath)
+    // Return the underlying ArrayBuffer slice so it transfers as bytes.
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  })
+
+  ipcMain.handle(IpcChannels.openMediaDialog, async () => {
+    const r = await dialog.showOpenDialog(mainWindow!, {
+      filters: [
+        { name: 'Media', extensions: ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'mp3', 'wav', 'aac'] }
+      ],
+      properties: ['openFile', 'multiSelections']
+    })
+    return r.canceled ? [] : r.filePaths
+  })
+
+  ipcMain.handle(IpcChannels.openProjectDialog, async () => {
+    const r = await dialog.showOpenDialog(mainWindow!, {
+      filters: [{ name: 'Video AI Project', extensions: ['aivp'] }],
+      properties: ['openFile']
+    })
+    return r.canceled ? null : r.filePaths[0]
+  })
+
+  ipcMain.handle(IpcChannels.saveProjectDialog, async () => {
+    const r = await dialog.showSaveDialog(mainWindow!, {
+      filters: [{ name: 'Video AI Project', extensions: ['aivp'] }]
+    })
+    return r.canceled ? null : r.filePath
+  })
+
+  ipcMain.handle(IpcChannels.loadProject, (_e, path: string) => loadProject(path))
+  ipcMain.handle(IpcChannels.saveProject, (_e, path: string, project: Project) =>
+    saveProject(path, project)
+  )
+
+  ipcMain.handle(
+    IpcChannels.exportSequence,
+    (_e, project: Project, sequenceId: string, outPath: string) =>
+      exportSequence(project, sequenceId, outPath, (line) =>
+        mainWindow?.webContents.send('export:progress', line)
+      )
+  )
+
+  ipcMain.handle(IpcChannels.mcpStatus, () => mcp.status())
+
+  // Renderer replies to a command:run event forwarded from the MCP bridge.
+  ipcMain.on(IpcEvents.runCommand + ':response', (_e, res: RunCommandResponse) =>
+    bridge.handleResponse(res)
+  )
+}
+
+app.whenReady().then(async () => {
+  registerIpc()
+  createWindow()
+  try {
+    const status = await mcp.start()
+    mainWindow?.webContents.on('did-finish-load', () =>
+      mainWindow?.webContents.send(IpcEvents.mcpStatusChanged, status)
+    )
+  } catch (err) {
+    console.error('Failed to start MCP server:', err)
+  }
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', async () => {
+  await mcp.stop()
+  if (process.platform !== 'darwin') app.quit()
+})
+
+export type { WebContents }

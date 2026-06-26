@@ -1,0 +1,22 @@
+appId: io.videoai.app
+productName: Video AI
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - out/**/*
+  - package.json
+# Bundle per-platform ffmpeg/ffprobe binaries placed under resources/ffmpeg/<platform>.
+extraResources:
+  - from: resources/ffmpeg/${os}
+    to: ffmpeg
+    filter: ['**/*']
+mac:
+  category: public.app-category.video
+  target: [dmg]
+  artifactName: ${productName}-${version}-${arch}.${ext}
+win:
+  target: [nsis]
+linux:
+  target: [AppImage, deb]
+  category: AudioVideo
