@@ -15,6 +15,7 @@ asarUnpack:
   - node_modules/ffmpeg-static/**/*
   - node_modules/ffprobe-static/**/*
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
@@ -24,12 +25,14 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
 mac:
+  icon: build/icon.icns
   target:
     - target: dmg
       arch: [x64, arm64]
   category: public.app-category.video
   artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
+  icon: build/icons
   target:
     - target: AppImage
       arch: [x64]

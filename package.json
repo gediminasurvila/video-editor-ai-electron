@@ -1,6 +1,6 @@
 {
   "name": "video-ai",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Cross-platform AI-native video editor (Electron)",
   "author": {
     "name": "Gediminas Survila",
@@ -16,6 +16,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "icons": "node scripts/build-icons.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "package": "electron-vite build && electron-builder",

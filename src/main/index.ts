@@ -14,6 +14,13 @@ let mainWindow: BrowserWindow | null = null
 const bridge = new CommandBridge(() => mainWindow?.webContents ?? null)
 const mcp = new EditorMcpServer(bridge)
 
+/** App icon for the window/taskbar (Linux & Windows dev; mac uses the bundle). */
+function iconPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'icon.png')
+    : join(__dirname, '../../build/icon.png')
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -21,6 +28,7 @@ function createWindow(): void {
     minWidth: 1024,
     minHeight: 640,
     backgroundColor: '#0d0d10',
+    icon: iconPath(),
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
