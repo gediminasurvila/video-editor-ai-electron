@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video AI — The video editor built for AI</title>
+    <meta
+      name="description"
+      content="A cross-platform desktop video editor (macOS, Windows, Linux) where an AI agent edits your timeline through the same commands you do. Built with Electron, WebCodecs, WebGL, and MCP."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0b0b0f;
+        --panel: #14141b;
+        --panel-2: #1b1b24;
+        --border: #262633;
+        --text: #e9e9f0;
+        --dim: #9a9aac;
+        --accent: #6c8cff;
+        --accent-2: #9b6cff;
+        --green: #4fd08a;
+        --pink: #e0556b;
+        --radius: 14px;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+      code,
+      pre {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+      }
+      .wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      /* Nav */
+      nav {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(11, 11, 15, 0.72);
+        backdrop-filter: blur(12px);
+        border-bottom: 1px solid var(--border);
+      }
+      nav .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-size: 18px;
+      }
+      .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 15px;
+      }
+      .nav-links {
+        display: flex;
+        gap: 28px;
+        align-items: center;
+        font-size: 14px;
+        color: var(--dim);
+      }
+      .nav-links a:hover {
+        color: var(--text);
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 14px;
+        border: 1px solid var(--border);
+        transition: 0.15s;
+      }
+      .btn-primary {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        border: none;
+        color: #fff;
+      }
+      .btn-primary:hover {
+        filter: brightness(1.1);
+        transform: translateY(-1px);
+      }
+      .btn-ghost:hover {
+        border-color: var(--accent);
+        color: #fff;
+      }
+
+      /* Hero */
+      header {
+        position: relative;
+        padding: 96px 0 72px;
+        text-align: center;
+        overflow: hidden;
+      }
+      header::before {
+        content: '';
+        position: absolute;
+        top: -200px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 900px;
+        height: 600px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(108, 140, 255, 0.18),
+          transparent 60%
+        );
+        pointer-events: none;
+      }
+      .badge {
+        display: inline-block;
+        padding: 6px 14px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        font-size: 13px;
+        color: var(--dim);
+        background: var(--panel);
+        margin-bottom: 28px;
+      }
+      .badge b {
+        color: var(--accent);
+      }
+      h1 {
+        font-size: clamp(38px, 6vw, 68px);
+        line-height: 1.05;
+        letter-spacing: -0.03em;
+        font-weight: 800;
+        max-width: 12ch;
+        margin: 0 auto;
+      }
+      h1 .grad {
+        background: linear-gradient(120deg, var(--accent), var(--accent-2) 60%, var(--green));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .sub {
+        margin: 24px auto 0;
+        max-width: 56ch;
+        font-size: clamp(16px, 2.2vw, 20px);
+        color: var(--dim);
+      }
+      .cta {
+        display: flex;
+        gap: 14px;
+        justify-content: center;
+        margin-top: 36px;
+        flex-wrap: wrap;
+      }
+      .platforms {
+        margin-top: 28px;
+        color: var(--dim);
+        font-size: 13px;
+        letter-spacing: 0.04em;
+      }
+
+      /* App mock */
+      .mock {
+        margin: 56px auto 0;
+        max-width: 940px;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--panel);
+        box-shadow: 0 40px 120px -40px rgba(108, 140, 255, 0.35);
+        overflow: hidden;
+      }
+      .mock-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel-2);
+      }
+      .dot {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+      .mock-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr 1.2fr;
+        height: 300px;
+      }
+      .mock-grid > div {
+        padding: 14px;
+        font-size: 12px;
+        color: var(--dim);
+        border-right: 1px solid var(--border);
+      }
+      .mock-grid .center {
+        background: #000;
+        display: grid;
+        place-items: center;
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .mock-time {
+        grid-column: 1 / -1;
+        border-top: 1px solid var(--border);
+        border-right: none !important;
+        background: var(--panel-2);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        justify-content: center;
+      }
+      .clip {
+        height: 22px;
+        border-radius: 5px;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        opacity: 0.85;
+      }
+      .clip.audio {
+        background: linear-gradient(90deg, var(--green), #2f9e74);
+        width: 60%;
+      }
+
+      /* Sections */
+      section {
+        padding: 80px 0;
+      }
+      .eyebrow {
+        color: var(--accent);
+        font-weight: 600;
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      h2 {
+        font-size: clamp(28px, 4vw, 40px);
+        letter-spacing: -0.02em;
+        margin: 10px 0 14px;
+        font-weight: 800;
+      }
+      .lead {
+        color: var(--dim);
+        max-width: 60ch;
+        font-size: 17px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 18px;
+        margin-top: 44px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 26px;
+        transition: 0.18s;
+      }
+      .card:hover {
+        border-color: var(--accent);
+        transform: translateY(-3px);
+      }
+      .card .ico {
+        font-size: 24px;
+        margin-bottom: 14px;
+      }
+      .card h3 {
+        font-size: 18px;
+        margin-bottom: 8px;
+        letter-spacing: -0.01em;
+      }
+      .card p {
+        color: var(--dim);
+        font-size: 14.5px;
+      }
+
+      .flow {
+        margin-top: 40px;
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        align-items: center;
+        gap: 16px;
+      }
+      .node {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        text-align: center;
+      }
+      .node b {
+        display: block;
+        margin-bottom: 4px;
+      }
+      .node span {
+        font-size: 13px;
+        color: var(--dim);
+      }
+      .arrow {
+        color: var(--accent);
+        font-size: 22px;
+        text-align: center;
+      }
+      .core {
+        margin-top: 16px;
+        text-align: center;
+        padding: 16px;
+        border: 1px dashed var(--accent);
+        border-radius: var(--radius);
+        background: rgba(108, 140, 255, 0.06);
+        font-weight: 600;
+      }
+
+      pre.code {
+        margin-top: 28px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 22px;
+        overflow-x: auto;
+        font-size: 13.5px;
+        line-height: 1.7;
+        color: #cdd6f4;
+      }
+      pre.code .c {
+        color: var(--dim);
+      }
+      pre.code .k {
+        color: var(--accent);
+      }
+      pre.code .s {
+        color: var(--green);
+      }
+
+      .tools {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 26px;
+      }
+      .tool {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 13px;
+        padding: 7px 13px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        color: var(--accent);
+      }
+
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 40px 0;
+        text-align: center;
+        color: var(--dim);
+        font-size: 14px;
+      }
+      footer a {
+        color: var(--accent);
+      }
+      @media (max-width: 720px) {
+        .nav-links {
+          display: none;
+        }
+        .flow {
+          grid-template-columns: 1fr;
+        }
+        .arrow {
+          transform: rotate(90deg);
+        }
+        .mock-grid {
+          grid-template-columns: 1fr;
+          height: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav>
+      <div class="wrap">
+        <div class="brand"><span class="logo">▶</span> Video AI</div>
+        <div class="nav-links">
+          <a href="#features">Features</a>
+          <a href="#how">How it works</a>
+          <a href="#mcp">MCP</a>
+          <a href="#start">Get started</a>
+        </div>
+        <a class="btn btn-ghost" href="https://github.com/gediminasurvila/video-editor-ai-electron"
+          >GitHub ↗</a
+        >
+      </div>
+    </nav>
+
+    <header>
+      <div class="wrap">
+        <span class="badge">Open source · <b>GPL-3.0</b> · macOS · Windows · Linux</span>
+        <h1>The video editor <span class="grad">built for AI</span></h1>
+        <p class="sub">
+          A cross-platform desktop editor where a built-in agent — or any external agent over MCP —
+          edits your timeline through the exact same commands you do. Every change is visible and
+          undoable.
+        </p>
+        <div class="cta">
+          <a
+            class="btn btn-primary"
+            href="https://github.com/gediminasurvila/video-editor-ai-electron"
+            >Get the code</a
+          >
+          <a
+            class="btn btn-ghost"
+            href="https://github.com/gediminasurvila/video-editor-ai-electron/releases"
+            >Releases</a
+          >
+        </div>
+        <div class="platforms">ELECTRON · WEBCODECS · WEBGL · MODEL CONTEXT PROTOCOL</div>
+
+        <div class="mock" aria-hidden="true">
+          <div class="mock-bar">
+            <span class="dot" style="background: #e0556b"></span>
+            <span class="dot" style="background: #f5b945"></span>
+            <span class="dot" style="background: #4fd08a"></span>
+            <span style="margin-left: 10px; font-size: 12px; color: var(--dim)"
+              >Video AI — Untitled.aivp</span
+            >
+          </div>
+          <div class="mock-grid">
+            <div><b style="color: var(--text)">Media</b><br />clip-a.mp4<br />clip-b.mp4</div>
+            <div class="center">▶ Preview</div>
+            <div>
+              <b style="color: var(--text)">Agent</b><br />› split clip at 5s<br />✓ split_clip
+            </div>
+            <div class="mock-time">
+              <div class="clip" style="width: 80%"></div>
+              <div class="clip audio"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <section id="features">
+      <div class="wrap">
+        <span class="eyebrow">Features</span>
+        <h2>A real editor, with AI at the core</h2>
+        <p class="lead">
+          Not a wrapper around a chatbot — a timeline editor whose every operation is a tool the AI
+          can call.
+        </p>
+        <div class="grid">
+          <div class="card">
+            <div class="ico">🎬</div>
+            <h3>Timeline editing</h3>
+            <p>Multi-track timeline: import, place, split, trim, move, transform, and delete clips.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🖥️</div>
+            <h3>WebCodecs + WebGL</h3>
+            <p>GPU-accelerated decode and compositing in the renderer. No per-OS native engine.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🤖</div>
+            <h3>In-app agent</h3>
+            <p>Chat that edits your project directly. Pluggable provider, Claude by default.</p>
+          </div>
+          <div class="card">
+            <div class="ico">🔌</div>
+            <h3>MCP server</h3>
+            <p>Claude Code, Cursor, and Codex connect locally and drive the same editor.</p>
+          </div>
+          <div class="card">
+            <div class="ico">📦</div>
+            <h3>Cross-platform</h3>
+            <p>Ships as .dmg, an NSIS installer, and AppImage / .deb from one codebase.</p>
+          </div>
+          <div class="card">
+            <div class="ico">↩️</div>
+            <h3>Undo everywhere</h3>
+            <p>AI edits go through the same history as manual ones — always reversible.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="how">
+      <div class="wrap">
+        <span class="eyebrow">How it works</span>
+        <h2>One command layer, three callers</h2>
+        <p class="lead">
+          The UI, the in-app agent, and the MCP server all dispatch through a single typed,
+          validated set of commands. That is what keeps human and AI edits identical.
+        </p>
+        <div class="flow">
+          <div class="node"><b>You</b><span>UI panels</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>In-app agent</b><span>Claude by default</span></div>
+          <div class="arrow">→</div>
+          <div class="node"><b>External agents</b><span>via MCP</span></div>
+        </div>
+        <div class="core">↓ &nbsp; EditorCommands &nbsp;·&nbsp; undo/redo &nbsp;·&nbsp; one source of truth &nbsp; ↓</div>
+      </div>
+    </section>
+
+    <section id="mcp">
+      <div class="wrap">
+        <span class="eyebrow">Model Context Protocol</span>
+        <h2>Bring your own agent</h2>
+        <p class="lead">
+          Run the app and point any MCP client at the local server. It exposes the editor's full
+          command set as tools.
+        </p>
+        <pre class="code"><span class="c"># Connect Claude Code to the running editor</span>
+<span class="k">claude</span> mcp add --transport http video-ai <span class="s">http://127.0.0.1:19789/mcp</span></pre>
+        <div class="tools">
+          <span class="tool">import_media</span><span class="tool">create_sequence</span
+          ><span class="tool">add_track</span><span class="tool">add_clip</span
+          ><span class="tool">split_clip</span><span class="tool">trim_clip</span
+          ><span class="tool">move_clip</span><span class="tool">set_property</span
+          ><span class="tool">delete_clip</span><span class="tool">get_timeline_state</span
+          ><span class="tool">export</span>
+        </div>
+      </div>
+    </section>
+
+    <section id="start">
+      <div class="wrap">
+        <span class="eyebrow">Get started</span>
+        <h2>Run it in a minute</h2>
+        <pre class="code"><span class="c"># Requires Node 20+ and ffmpeg on your PATH</span>
+<span class="k">git</span> clone git@github.com:gediminasurvila/video-editor-ai-electron.git
+<span class="k">cd</span> video-editor-ai-electron
+<span class="k">npm</span> install
+<span class="k">npm</span> run dev</pre>
+        <div class="cta" style="justify-content: flex-start; margin-top: 28px">
+          <a
+            class="btn btn-primary"
+            href="https://github.com/gediminasurvila/video-editor-ai-electron#readme"
+            >Read the docs</a
+          >
+          <a
+            class="btn btn-ghost"
+            href="https://github.com/gediminasurvila/video-editor-ai-electron"
+            >Star on GitHub</a
+          >
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        Built by Gediminas Survila · GPL-3.0-or-later ·
+        <a href="https://github.com/gediminasurvila/video-editor-ai-electron">GitHub</a>
+      </div>
+    </footer>
+  </body>
+</html>
