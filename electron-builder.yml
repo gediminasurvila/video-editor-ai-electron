@@ -1,22 +1,42 @@
 appId: io.videoai.app
 productName: Video AI
+copyright: Copyright © 2026 Gediminas Survila
 directories:
-  output: dist
-  buildResources: resources
+  output: release
+  buildResources: build
 files:
   - out/**/*
   - package.json
-# Bundle per-platform ffmpeg/ffprobe binaries placed under resources/ffmpeg/<platform>.
 extraResources:
-  - from: resources/ffmpeg/${os}
-    to: ffmpeg
-    filter: ['**/*']
-mac:
-  category: public.app-category.video
-  target: [dmg]
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  - from: build/icon.png
+    to: icon.png
+# Keep the ffmpeg/ffprobe binaries outside the asar so they remain executable.
+asarUnpack:
+  - node_modules/ffmpeg-static/**/*
+  - node_modules/ffprobe-static/**/*
 win:
-  target: [nsis]
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: ${productName}-${version}-Setup-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+  category: public.app-category.video
+  artifactName: ${productName}-${version}-${arch}.${ext}
 linux:
-  target: [AppImage, deb]
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
   category: AudioVideo
+  synopsis: The video editor built for AI — edit timelines with an AI agent over MCP.
+  desktop:
+    StartupWMClass: Video AI
+  artifactName: ${productName}-${version}-${arch}.${ext}

@@ -11,7 +11,7 @@ interface Entry {
 }
 
 export function AgentChat(): JSX.Element {
-  const { provider, apiKey, setApiKey } = useSettings()
+  const { provider, apiKey, model, setApiKey } = useSettings()
   const [entries, setEntries] = useState<Entry[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -21,7 +21,7 @@ export function AgentChat(): JSX.Element {
   function getProvider(): AgentProvider {
     if (!providerRef.current) {
       if (provider !== 'claude') throw new Error(`Provider "${provider}" not implemented yet`)
-      providerRef.current = new ClaudeProvider(apiKey)
+      providerRef.current = new ClaudeProvider(apiKey, model)
     }
     return providerRef.current
   }

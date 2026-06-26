@@ -4,7 +4,7 @@ import { useEditor } from '../../state/store'
 import { runCommand } from '../../commands'
 import type { McpStatus } from '@shared/ipc'
 
-export function Toolbar(): JSX.Element {
+export function Toolbar({ onOpenSettings }: { onOpenSettings: () => void }): JSX.Element {
   const { project, filePath, undo, redo, past, future, setProject } = useEditor()
   const [mcp, setMcp] = useState<McpStatus | null>(null)
 
@@ -67,12 +67,19 @@ export function Toolbar(): JSX.Element {
       </button>
       <button onClick={exportVideo}>Export</button>
       <div style={{ flex: 1 }} />
-      <span style={{ fontSize: theme.font.size.sm, color: theme.color.textDim }}>
+      <button
+        onClick={onOpenSettings}
+        title="Settings & MCP config"
+        style={{ fontSize: theme.font.size.sm, color: theme.color.textDim }}
+      >
         MCP{' '}
         <span style={{ color: mcp?.running ? '#5ad07a' : theme.color.danger }}>
-          {mcp?.running ? mcp.url : 'offline'}
+          ● {mcp?.running ? 'online' : 'offline'}
         </span>
-      </span>
+      </button>
+      <button onClick={onOpenSettings} title="Settings">
+        ⚙
+      </button>
     </div>
   )
 }

@@ -6,15 +6,18 @@ import { Preview } from '../panels/Preview/Preview'
 import { Inspector } from '../panels/Inspector/Inspector'
 import { Timeline } from '../panels/Timeline/Timeline'
 import { AgentChat } from '../panels/AgentChat/AgentChat'
+import { SettingsModal } from '../panels/Settings/SettingsModal'
 
 type RightTab = 'inspector' | 'agent'
 
 export function App(): JSX.Element {
   const [rightTab, setRightTab] = useState<RightTab>('agent')
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Toolbar />
+      <Toolbar onOpenSettings={() => setSettingsOpen(true)} />
+      <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         <Panel width={260} border="right">
           <MediaPanel />

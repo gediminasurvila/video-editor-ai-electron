@@ -1,17 +1,23 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import ffmpegStatic from 'ffmpeg-static'
+import ffprobeStatic from 'ffprobe-static'
 import type { ProbeResult } from '@shared/ipc'
 
 const execFileAsync = promisify(execFile)
 
 /**
- * Resolve the ffmpeg/ffprobe binaries. In development we fall back to the
- * binaries on PATH; in a packaged build these are bundled under
- * resources/ffmpeg/<platform> (wired up in electron-builder config).
+ * Resolve the ffmpeg/ffprobe binaries. We bundle them via ffmpeg-static /
+ * ffprobe-static so packaged apps are self-contained on every platform. In a
+ * packaged (asar) build the path lives in `app.asar.unpacked` (see
+ * electron-builder `asarUnpack`). An env override or PATH fallback covers dev
+ * setups where the static binary is unavailable.
  */
 function binary(name: 'ffmpeg' | 'ffprobe'): string {
   const fromEnv = process.env[name.toUpperCase() + '_PATH']
   if (fromEnv) return fromEnv
+  const staticPath = name === 'ffmpeg' ? ffmpegStatic : ffprobeStatic.path
+  if (staticPath) return staticPath.replace('app.asar', 'app.asar.unpacked')
   return name
 }
 
