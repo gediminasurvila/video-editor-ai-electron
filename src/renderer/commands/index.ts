@@ -1,6 +1,32 @@
 import { commandSchemas, type CommandName } from '@shared/commands'
-import { clipDuration, type Clip, type Track } from '@shared/schema'
+import { clipDuration, isTitle, type Clip, type Project, type Sequence, type Track } from '@shared/schema'
 import { useEditor, activeSequence } from '../state/store'
+import { TitleRenderer } from '../engine/TitleRenderer'
+
+/** Render every title clip in a sequence to a PNG data URL for export baking. */
+function renderTitlePngs(seq: Sequence): Record<string, string> {
+  const renderer = new TitleRenderer()
+  const out: Record<string, string> = {}
+  for (const track of seq.tracks) {
+    for (const clip of track.clips) {
+      if (isTitle(clip) && clip.title) {
+        const canvas = renderer.get(clip.id, clip.title, seq.width, seq.height)
+        out[clip.id] = canvas.toDataURL('image/png')
+      }
+    }
+  }
+  return out
+}
+
+/** Find a clip in a project draft's active sequence (for use inside `commit`). */
+function findClipIn(project: Project, clipId: string): Clip | null {
+  const seq = project.sequences.find((s) => s.id === project.activeSequenceId)
+  for (const track of seq?.tracks ?? []) {
+    const clip = track.clips.find((c) => c.id === clipId)
+    if (clip) return clip
+  }
+  return null
+}
 
 /**
  * Implementations of every editor command. The UI, the in-app agent, and the
@@ -71,12 +97,16 @@ const handlers: Handlers = {
       if (!track) throw new Error(`Track ${trackId} not found`)
       track.clips.push({
         id,
+        kind: 'media',
         mediaId,
         start,
         inPoint,
         outPoint: outPoint ?? media.duration,
         transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
-        effects: []
+        effects: [],
+        volume: 1,
+        fadeIn: 0,
+        fadeOut: 0
       })
     })
     return { clipId: id }
@@ -177,12 +207,94 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
+  add_title: ({ text, start, duration, trackId }) => {
+    const id = crypto.randomUUID()
+    useEditor.getState().commit((p) => {
+      const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
+      if (!seq) throw new Error('No active sequence')
+      const track = trackId
+        ? seq.tracks.find((t) => t.id === trackId)
+        : seq.tracks.find((t) => t.type === 'video')
+      if (!track) throw new Error('No video track for the title')
+      const at =
+        start ??
+        track.clips.reduce((max, c) => Math.max(max, c.start + clipDuration(c)), 0)
+      track.clips.push({
+        id,
+        kind: 'title',
+        mediaId: '',
+        title: { text, fontSize: 96, color: '#ffffff', background: 'transparent', align: 'center' },
+        start: at,
+        inPoint: 0,
+        outPoint: duration,
+        transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+        effects: [],
+        volume: 1,
+        fadeIn: 0,
+        fadeOut: 0
+      })
+    })
+    return { clipId: id }
+  },
+
+  set_title: ({ clipId, text, fontSize, color, background }) => {
+    useEditor.getState().commit((p) => {
+      const clip = findClipIn(p, clipId)
+      if (!clip) throw new Error(`Clip ${clipId} not found`)
+      if (clip.kind !== 'title' || !clip.title) throw new Error('Clip is not a title')
+      if (text !== undefined) clip.title.text = text
+      if (fontSize !== undefined) clip.title.fontSize = fontSize
+      if (color !== undefined) clip.title.color = color
+      if (background !== undefined) clip.title.background = background
+    })
+    return { ok: true }
+  },
+
+  set_audio: ({ clipId, volume, fadeIn, fadeOut }) => {
+    useEditor.getState().commit((p) => {
+      const clip = findClipIn(p, clipId)
+      if (!clip) throw new Error(`Clip ${clipId} not found`)
+      if (volume !== undefined) clip.volume = volume
+      if (fadeIn !== undefined) clip.fadeIn = fadeIn
+      if (fadeOut !== undefined) clip.fadeOut = fadeOut
+    })
+    return { ok: true }
+  },
+
+  set_transition: ({ clipId, type, duration }) => {
+    useEditor.getState().commit((p) => {
+      const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
+      for (const track of seq?.tracks ?? []) {
+        const clip = track.clips.find((c) => c.id === clipId)
+        if (!clip) continue
+        if (type === 'none' || duration <= 0) {
+          delete clip.transition
+          return
+        }
+        // Overlap the previous clip by `duration` so they actually cross-dissolve.
+        const prev = track.clips
+          .filter((c) => c.id !== clipId && c.start < clip.start)
+          .sort((a, b) => b.start - a.start)[0]
+        if (prev) {
+          const prevEnd = prev.start + clipDuration(prev)
+          clip.start = Math.max(0, prevEnd - duration)
+        }
+        clip.transition = { type: 'dissolve', duration }
+        return
+      }
+      throw new Error(`Clip ${clipId} not found`)
+    })
+    return { ok: true }
+  },
+
   get_timeline_state: () => useEditor.getState().project,
 
   export: async ({ outPath }) => {
     const { project } = useEditor.getState()
     if (!project.activeSequenceId) throw new Error('No active sequence to export')
-    await window.api.exportSequence(project, project.activeSequenceId, outPath)
+    const seq = project.sequences.find((s) => s.id === project.activeSequenceId)
+    const titlePngs = seq ? renderTitlePngs(seq) : {}
+    await window.api.exportSequence(project, project.activeSequenceId, outPath, titlePngs)
     return { outPath }
   }
 }

@@ -5,6 +5,7 @@ import type { CommandName } from './commands'
 export const IpcChannels = {
   probeMedia: 'media:probe',
   readMediaBytes: 'media:readBytes',
+  thumbnails: 'media:thumbnails',
   openMediaDialog: 'media:openDialog',
   openProjectDialog: 'project:openDialog',
   saveProjectDialog: 'project:saveDialog',

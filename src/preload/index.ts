@@ -12,6 +12,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.probeMedia, filePath),
   readMediaBytes: (filePath: string): Promise<ArrayBuffer> =>
     ipcRenderer.invoke(IpcChannels.readMediaBytes, filePath),
+  thumbnails: (filePath: string, duration: number, count: number, height: number): Promise<string[]> =>
+    ipcRenderer.invoke(IpcChannels.thumbnails, filePath, duration, count, height),
 
   openMediaDialog: (): Promise<string[]> => ipcRenderer.invoke(IpcChannels.openMediaDialog),
   /** Resolve the absolute path of a File dropped onto the window. */
@@ -26,8 +28,13 @@ const api = {
   exportDialog: (defaultName: string): Promise<string | null> =>
     ipcRenderer.invoke(IpcChannels.exportDialog, defaultName),
 
-  exportSequence: (project: Project, sequenceId: string, outPath: string): Promise<void> =>
-    ipcRenderer.invoke(IpcChannels.exportSequence, project, sequenceId, outPath),
+  exportSequence: (
+    project: Project,
+    sequenceId: string,
+    outPath: string,
+    titlePngs: Record<string, string>
+  ): Promise<void> =>
+    ipcRenderer.invoke(IpcChannels.exportSequence, project, sequenceId, outPath, titlePngs),
 
   mcpStatus: (): Promise<McpStatus> => ipcRenderer.invoke(IpcChannels.mcpStatus),
   onMcpStatusChanged: (cb: (status: McpStatus) => void): (() => void) => {

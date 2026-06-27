@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
+import { useThumbnails } from '../../state/thumbnails'
 import { runCommand } from '../../commands'
 import { addMediaToTimeline } from '../../actions/quickActions'
 import { snapTime } from '../../timeline/snap'
-import { clipDuration, type Clip } from '@shared/schema'
+import { clipDuration, isTitle, type Clip } from '@shared/schema'
 
 const TRACK_HEIGHT = 60
 const LABEL_WIDTH = 96
@@ -40,9 +41,15 @@ export function Timeline(): JSX.Element {
   const [pxPerSec, setPxPerSec] = useState(50)
   const [drag, setDrag] = useState<Drag | null>(null)
   const laneRef = useRef<HTMLDivElement>(null)
+  const strips = useThumbnails((s) => s.strips)
+  const ensureThumbs = useThumbnails((s) => s.ensure)
 
   // ----- helpers -----
   const mediaById = new Map(project.mediaPool.map((m) => [m.id, m]))
+
+  useEffect(() => {
+    for (const m of project.mediaPool) ensureThumbs(m)
+  }, [project.mediaPool, ensureThumbs])
 
   function snapPoints(exceptClipId?: string): number[] {
     const pts = [0, playhead]
@@ -196,6 +203,13 @@ export function Timeline(): JSX.Element {
       >
         <strong style={{ fontSize: theme.font.size.sm }}>Timeline</strong>
         <button
+          disabled={!seq}
+          onClick={() => runCommand('add_title', { text: 'Title', start: playhead, duration: 3 })}
+          title="Add a text/title clip at the playhead"
+        >
+          T Title
+        </button>
+        <button
           disabled={!selectedClipId}
           onClick={() =>
             selectedClipId && runCommand('split_clip', { clipId: selectedClipId, at: playhead })
@@ -300,23 +314,28 @@ export function Timeline(): JSX.Element {
                   const dur = live ? live.outPoint - live.inPoint : clipDuration(clip)
                   const media = mediaById.get(clip.mediaId)
                   const selected = selectedClipId === clip.id
+                  const title = isTitle(clip)
+                  const widthPx = Math.max(2, dur * pxPerSec)
+                  const bg = title
+                    ? 'linear-gradient(135deg,#5a4a8c,#8c5a7a)'
+                    : track.type === 'video'
+                      ? theme.color.clip
+                      : theme.color.clipAudio
                   return (
                     <div
                       key={clip.id}
                       onPointerDown={(e) => onClipPointerDown(e, clip, track.id)}
-                      title={media?.name}
+                      title={title ? clip.title?.text : media?.name}
                       style={{
                         position: 'absolute',
                         left: start * pxPerSec,
-                        width: Math.max(2, dur * pxPerSec),
+                        width: widthPx,
                         top: 5,
                         bottom: 5,
-                        background:
-                          track.type === 'video' ? theme.color.clip : theme.color.clipAudio,
+                        background: bg,
                         border: `2px solid ${selected ? theme.color.accent : 'transparent'}`,
                         borderRadius: theme.radius.sm,
                         overflow: 'hidden',
-                        padding: '3px 8px',
                         fontSize: theme.font.size.sm,
                         whiteSpace: 'nowrap',
                         color: '#fff',
@@ -325,10 +344,47 @@ export function Timeline(): JSX.Element {
                         boxShadow: selected ? `0 0 0 1px ${theme.color.accent}` : 'none'
                       }}
                     >
-                      {/* edge affordances */}
+                      {!title && track.type === 'video' && media && (
+                        <Filmstrip
+                          strip={strips[clip.mediaId]}
+                          mediaDuration={media.duration}
+                          inPoint={clip.inPoint}
+                          dur={dur}
+                          widthPx={widthPx}
+                          pxPerSec={pxPerSec}
+                        />
+                      )}
+                      {/* fade ramps */}
+                      {clip.fadeIn > 0 && <FadeTri side="left" w={clip.fadeIn * pxPerSec} />}
+                      {clip.fadeOut > 0 && <FadeTri side="right" w={clip.fadeOut * pxPerSec} />}
+                      {/* cross-dissolve badge */}
+                      {clip.transition && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            left: 2,
+                            top: 2,
+                            fontSize: 10,
+                            background: 'rgba(0,0,0,0.45)',
+                            borderRadius: 3,
+                            padding: '0 3px'
+                          }}
+                        >
+                          ⤫
+                        </div>
+                      )}
+                      <span
+                        style={{
+                          position: 'relative',
+                          display: 'inline-block',
+                          padding: '3px 8px',
+                          textShadow: '0 1px 2px rgba(0,0,0,0.7)'
+                        }}
+                      >
+                        {title ? `T  ${clip.title?.text ?? ''}` : media?.name ?? 'clip'}
+                      </span>
                       <Edge side="left" />
                       <Edge side="right" />
-                      {media?.name ?? 'clip'}
                     </div>
                   )
                 })}
@@ -365,6 +421,71 @@ function Edge({ side }: { side: 'left' | 'right' }): JSX.Element {
         [side]: 0,
         width: EDGE_PX,
         cursor: 'ew-resize'
+      }}
+    />
+  )
+}
+
+/** Lay out the media's thumbnails across the clip's trimmed source range. */
+function Filmstrip({
+  strip,
+  mediaDuration,
+  inPoint,
+  dur,
+  widthPx,
+  pxPerSec
+}: {
+  strip?: string[]
+  mediaDuration: number
+  inPoint: number
+  dur: number
+  widthPx: number
+  pxPerSec: number
+}): JSX.Element | null {
+  if (!strip || strip.length === 0 || mediaDuration <= 0) return null
+  const thumbW = 48
+  const out = strip.map((src, i) => {
+    if (!src) return null
+    const sourceTime = (mediaDuration * (i + 0.5)) / strip.length
+    if (sourceTime < inPoint || sourceTime > inPoint + dur) return null
+    const left = (sourceTime - inPoint) * pxPerSec - thumbW / 2
+    if (left > widthPx) return null
+    return (
+      <img
+        key={i}
+        src={src}
+        draggable={false}
+        style={{
+          position: 'absolute',
+          left: Math.max(0, left),
+          top: 0,
+          bottom: 0,
+          width: thumbW,
+          height: '100%',
+          objectFit: 'cover',
+          opacity: 0.85,
+          pointerEvents: 'none'
+        }}
+      />
+    )
+  })
+  return <>{out}</>
+}
+
+/** A translucent triangle showing a fade-in/out ramp at a clip edge. */
+function FadeTri({ side, w }: { side: 'left' | 'right'; w: number }): JSX.Element {
+  const clip = side === 'left' ? 'polygon(0 100%, 100% 0, 0 0)' : 'polygon(100% 100%, 0 0, 100% 0)'
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        [side]: 0,
+        width: Math.min(w, 200),
+        background: 'rgba(0,0,0,0.55)',
+        clipPath: clip,
+        pointerEvents: 'none'
       }}
     />
   )

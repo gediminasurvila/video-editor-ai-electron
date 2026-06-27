@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
 import { IpcChannels, IpcEvents, type RunCommandResponse } from '@shared/ipc'
-import { probeMedia } from './ffmpeg/sidecar'
+import { probeMedia, generateThumbnails } from './ffmpeg/sidecar'
 import { loadProject, saveProject } from './project/io'
 import { exportSequence } from './export/render'
 import { CommandBridge } from './mcp/bridge'
@@ -48,6 +48,12 @@ function createWindow(): void {
 
 function registerIpc(): void {
   ipcMain.handle(IpcChannels.probeMedia, (_e, filePath: string) => probeMedia(filePath))
+
+  ipcMain.handle(
+    IpcChannels.thumbnails,
+    (_e, filePath: string, duration: number, count: number, height: number) =>
+      generateThumbnails(filePath, duration, count, height)
+  )
 
   ipcMain.handle(IpcChannels.readMediaBytes, async (_e, filePath: string) => {
     const buf = await readFile(filePath)
@@ -96,8 +102,14 @@ function registerIpc(): void {
 
   ipcMain.handle(
     IpcChannels.exportSequence,
-    (_e, project: Project, sequenceId: string, outPath: string) =>
-      exportSequence(project, sequenceId, outPath, (line) =>
+    (
+      _e,
+      project: Project,
+      sequenceId: string,
+      outPath: string,
+      titlePngs: Record<string, string>
+    ) =>
+      exportSequence(project, sequenceId, outPath, titlePngs ?? {}, (line) =>
         mainWindow?.webContents.send('export:progress', line)
       )
   )

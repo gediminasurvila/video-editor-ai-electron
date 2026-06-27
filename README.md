@@ -127,7 +127,11 @@ It's built to be simple — closer to Camtasia/ScreenFlow than to Premiere. No s
    - Clips **snap** to the playhead and to each other.
    - **✂ Split** cuts the selected clip at the playhead; **🗑 Delete** removes it.
    - **− / Fit / +** zoom the timeline.
-3. **Adjust properties** — select a clip; the **Properties** panel (right) sets position, scale, rotation, opacity.
+3. **Titles** — click **T Title** to drop a text clip; edit its text, font size, and color in **Properties**.
+4. **Volume & fades** — in **Properties**, set a clip's volume and fade-in/out (shown as triangles on the clip).
+5. **Cross-dissolve** — select a clip and choose **Transition → Dissolve** to blend it with the previous clip.
+6. **Thumbnails** — clips show a filmstrip; the media bin shows a poster frame.
+7. **Adjust properties** — select a clip; the **Properties** panel (right) sets position, scale, rotation, opacity.
 4. **Preview** — press **▶** (or Space); the WebGL engine composites the frame on the canvas.
 5. **Save / Open** — **Save** writes a `.aivp` project; **Open** loads one.
 6. **Export** — **⬆ Export** renders to `.mp4` via the bundled FFmpeg, with progress in the toolbar.

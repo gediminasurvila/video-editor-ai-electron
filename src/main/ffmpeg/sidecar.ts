@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
 import ffmpegStatic from 'ffmpeg-static'
 import ffprobeStatic from 'ffprobe-static'
@@ -76,6 +76,58 @@ export async function probeMedia(filePath: string): Promise<ProbeResult> {
  * later milestone; for now we render the first video track sequentially with the
  * filter graph so end-to-end export works.
  */
+/** Run ffmpeg and collect its stdout as binary (used for piped thumbnails). */
+function ffmpegStdout(args: string[]): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary('ffmpeg'), args)
+    const chunks: Buffer[] = []
+    child.stdout.on('data', (c: Buffer) => chunks.push(c))
+    child.on('error', reject)
+    child.on('close', (code) =>
+      code === 0 ? resolve(Buffer.concat(chunks)) : reject(new Error(`ffmpeg exited ${code}`))
+    )
+  })
+}
+
+/**
+ * Extract `count` evenly-spaced thumbnail frames as JPEG data URLs — used for the
+ * media-bin poster and the timeline filmstrip. Returns one data URL per frame
+ * (empty string for any frame that fails to decode).
+ */
+export async function generateThumbnails(
+  filePath: string,
+  duration: number,
+  count: number,
+  height: number
+): Promise<string[]> {
+  const safeDuration = duration > 0 ? duration : 1
+  const out: string[] = []
+  for (let i = 0; i < count; i++) {
+    const t = (safeDuration * (i + 0.5)) / count
+    try {
+      const buf = await ffmpegStdout([
+        '-ss',
+        t.toFixed(3),
+        '-i',
+        filePath,
+        '-frames:v',
+        '1',
+        '-vf',
+        `scale=-2:${height}`,
+        '-f',
+        'image2pipe',
+        '-vcodec',
+        'mjpeg',
+        '-'
+      ])
+      out.push(buf.length ? `data:image/jpeg;base64,${buf.toString('base64')}` : '')
+    } catch {
+      out.push('')
+    }
+  }
+  return out
+}
+
 export async function runFfmpeg(args: string[], onProgress?: (line: string) => void): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = execFile(binary('ffmpeg'), args)

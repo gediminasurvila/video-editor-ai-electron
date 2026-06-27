@@ -1,11 +1,14 @@
 import type { Transform } from '@shared/schema'
 
 export interface Layer {
-  frame: VideoFrame
+  /** Any uploadable image source: a decoded VideoFrame or a title canvas. */
+  frame: TexImageSource
   /** Native frame dimensions, for aspect-correct "contain" fitting. */
   frameWidth: number
   frameHeight: number
   transform: Transform
+  /** Extra opacity multiplier for fades / cross-dissolves (default 1). */
+  alpha?: number
 }
 
 const VERT = `#version 300 es
@@ -130,7 +133,7 @@ export class Compositor {
         false,
         this.matrixFor(layer.transform, layer.frameWidth, layer.frameHeight)
       )
-      gl.uniform1f(this.opacityLoc, layer.transform.opacity)
+      gl.uniform1f(this.opacityLoc, layer.transform.opacity * (layer.alpha ?? 1))
       gl.drawArrays(gl.TRIANGLES, 0, 6)
     }
   }

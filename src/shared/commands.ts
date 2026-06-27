@@ -64,6 +64,30 @@ export const commandSchemas = {
   delete_clip: z.object({
     clipId: z.string()
   }),
+  add_title: z.object({
+    text: z.string().default('Title'),
+    start: z.number().min(0).optional().describe('Timeline position in seconds; defaults to the end'),
+    duration: z.number().positive().default(3),
+    trackId: z.string().optional().describe('Video track id; defaults to the first video track')
+  }),
+  set_title: z.object({
+    clipId: z.string(),
+    text: z.string().optional(),
+    fontSize: z.number().positive().optional(),
+    color: z.string().optional(),
+    background: z.string().optional().describe("Hex color or 'transparent'")
+  }),
+  set_audio: z.object({
+    clipId: z.string(),
+    volume: z.number().min(0).max(4).optional().describe('1 = unchanged'),
+    fadeIn: z.number().min(0).optional().describe('Fade-in seconds'),
+    fadeOut: z.number().min(0).optional().describe('Fade-out seconds')
+  }),
+  set_transition: z.object({
+    clipId: z.string(),
+    type: z.enum(['dissolve', 'none']).default('dissolve'),
+    duration: z.number().min(0).default(1).describe('Cross-dissolve seconds with the previous clip')
+  }),
   get_timeline_state: z.object({}),
   export: z.object({
     outPath: z.string().describe('Absolute path for the rendered output file'),
@@ -84,6 +108,11 @@ export const commandDescriptions: Record<CommandName, string> = {
   move_clip: 'Move a clip to a new start time and optionally a different track.',
   set_property: 'Set transform properties (position, scale, rotation, opacity) on a clip.',
   delete_clip: 'Remove a clip from the timeline.',
+  add_title: 'Add a text/title clip to a video track.',
+  set_title: 'Edit a title clip\'s text and style (font size, color, background).',
+  set_audio: 'Set a clip\'s volume and audio/video fade-in and fade-out durations.',
+  set_transition:
+    'Set or remove a cross-dissolve transition into a clip from the previous one (overlaps them).',
   get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
   export: 'Render the active sequence to a video file.'
 }

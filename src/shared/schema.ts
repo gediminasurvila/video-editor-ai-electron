@@ -24,16 +24,43 @@ export const EffectSchema = z.object({
 })
 export type Effect = z.infer<typeof EffectSchema>
 
+/** A text/title overlay clip (no source media). */
+export const TitleSchema = z.object({
+  text: z.string().default('Title'),
+  fontSize: z.number().positive().default(96),
+  color: z.string().default('#ffffff'),
+  /** Background fill behind the text: a hex color, or 'transparent' to overlay. */
+  background: z.string().default('transparent'),
+  align: z.enum(['center', 'left', 'right']).default('center')
+})
+export type Title = z.infer<typeof TitleSchema>
+
+/** A cross-dissolve into this clip from the previous (overlapping) clip. */
+export const TransitionSchema = z.object({
+  type: z.enum(['dissolve']).default('dissolve'),
+  duration: z.number().min(0).default(1)
+})
+export type Transition = z.infer<typeof TransitionSchema>
+
 export const ClipSchema = z.object({
   id: z.string(),
-  mediaId: z.string(),
+  /** 'media' clips reference the media pool; 'title' clips render text. */
+  kind: z.enum(['media', 'title']).default('media'),
+  mediaId: z.string().default(''),
+  title: TitleSchema.optional(),
   /** Position on the timeline, in seconds. */
   start: z.number().min(0),
-  /** In/out points within the source media, in seconds. */
+  /** In/out points within the source media (or 0..duration for titles), in seconds. */
   inPoint: z.number().min(0),
   outPoint: z.number().min(0),
   transform: TransformSchema.default({}),
-  effects: z.array(EffectSchema).default([])
+  effects: z.array(EffectSchema).default([]),
+  /** Audio gain (1 = unchanged). */
+  volume: z.number().min(0).max(4).default(1),
+  /** Fade in/out durations in seconds (apply to video opacity and audio gain). */
+  fadeIn: z.number().min(0).default(0),
+  fadeOut: z.number().min(0).default(0),
+  transition: TransitionSchema.optional()
 })
 export type Clip = z.infer<typeof ClipSchema>
 
@@ -83,6 +110,10 @@ export type Project = z.infer<typeof ProjectSchema>
 
 export function clipDuration(clip: Clip): number {
   return Math.max(0, clip.outPoint - clip.inPoint)
+}
+
+export function isTitle(clip: Clip): boolean {
+  return clip.kind === 'title'
 }
 
 export function sequenceDuration(seq: Sequence): number {

@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor } from '../../state/store'
+import { useThumbnails } from '../../state/thumbnails'
 import { importViaDialog, addMediaToTimeline } from '../../actions/quickActions'
 
 function fmtDuration(s: number): string {
@@ -10,6 +12,12 @@ function fmtDuration(s: number): string {
 
 export function MediaPanel(): JSX.Element {
   const project = useEditor((s) => s.project)
+  const strips = useThumbnails((s) => s.strips)
+  const ensure = useThumbnails((s) => s.ensure)
+
+  useEffect(() => {
+    for (const m of project.mediaPool) ensure(m)
+  }, [project.mediaPool, ensure])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -50,15 +58,37 @@ export function MediaPanel(): JSX.Element {
               marginBottom: theme.space.xs,
               background: theme.color.panelAlt,
               borderRadius: theme.radius.sm,
-              cursor: 'grab'
+              cursor: 'grab',
+              display: 'flex',
+              gap: theme.space.sm,
+              alignItems: 'center'
             }}
           >
-            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {m.name}
+            <div
+              style={{
+                width: 64,
+                height: 36,
+                flexShrink: 0,
+                borderRadius: theme.radius.sm,
+                background: strips[m.id]?.[0]
+                  ? `#000 center/cover no-repeat url(${strips[m.id][0]})`
+                  : theme.color.track,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 16
+              }}
+            >
+              {!strips[m.id]?.[0] && (m.width > 0 ? '🎞️' : '🔊')}
             </div>
-            <div style={{ fontSize: theme.font.size.sm, color: theme.color.textDim }}>
-              {m.width > 0 ? `${m.width}×${m.height} · ` : ''}
-              {fmtDuration(m.duration)} · {m.codec ?? 'audio'}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {m.name}
+              </div>
+              <div style={{ fontSize: theme.font.size.sm, color: theme.color.textDim }}>
+                {m.width > 0 ? `${m.width}×${m.height} · ` : ''}
+                {fmtDuration(m.duration)}
+              </div>
             </div>
           </div>
         ))}
