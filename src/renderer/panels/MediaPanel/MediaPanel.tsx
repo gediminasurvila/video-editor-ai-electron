@@ -1,6 +1,6 @@
 import { theme } from '../../app/theme'
-import { useEditor, activeSequence } from '../../state/store'
-import { runCommand } from '../../commands'
+import { useEditor } from '../../state/store'
+import { importViaDialog, addMediaToTimeline } from '../../actions/quickActions'
 
 function fmtDuration(s: number): string {
   const m = Math.floor(s / 60)
@@ -11,44 +11,46 @@ function fmtDuration(s: number): string {
 export function MediaPanel(): JSX.Element {
   const project = useEditor((s) => s.project)
 
-  async function importMedia(): Promise<void> {
-    const paths = await window.api.openMediaDialog()
-    for (const p of paths) await runCommand('import_media', { filePath: p })
-  }
-
-  async function addToTimeline(mediaId: string): Promise<void> {
-    const seq = activeSequence(useEditor.getState().project)
-    if (!seq) {
-      alert('Create a sequence first (+ Sequence).')
-      return
-    }
-    const track = seq.tracks.find((t) => t.type === 'video')
-    if (!track) return
-    // Append after the last clip on the track.
-    const start = track.clips.reduce((max, c) => Math.max(max, c.start + (c.outPoint - c.inPoint)), 0)
-    await runCommand('add_clip', { trackId: track.id, mediaId, start })
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <Header title="Media" action={<button onClick={importMedia}>Import</button>} />
+      <Header title="Media" action={<button onClick={importViaDialog}>+ Import</button>} />
       <div style={{ flex: 1, overflowY: 'auto', padding: theme.space.sm }}>
         {project.mediaPool.length === 0 && (
-          <p style={{ color: theme.color.textDim, fontSize: theme.font.size.sm }}>
-            No media yet. Click Import to add video or audio files.
-          </p>
+          <div
+            onClick={importViaDialog}
+            style={{
+              marginTop: theme.space.md,
+              padding: theme.space.lg,
+              border: `1px dashed ${theme.color.border}`,
+              borderRadius: theme.radius.md,
+              textAlign: 'center',
+              color: theme.color.textDim,
+              fontSize: theme.font.size.sm,
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{ fontSize: 22, marginBottom: theme.space.sm }}>📁</div>
+            Drop video or audio files here,
+            <br />
+            or click to import.
+          </div>
         )}
         {project.mediaPool.map((m) => (
           <div
             key={m.id}
-            onDoubleClick={() => addToTimeline(m.id)}
-            title="Double-click to add to timeline"
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.setData('application/x-media-id', m.id)
+              e.dataTransfer.effectAllowed = 'copy'
+            }}
+            onDoubleClick={() => addMediaToTimeline(m.id)}
+            title="Double-click or drag onto the timeline"
             style={{
               padding: theme.space.sm,
               marginBottom: theme.space.xs,
               background: theme.color.panelAlt,
               borderRadius: theme.radius.sm,
-              cursor: 'pointer'
+              cursor: 'grab'
             }}
           >
             <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

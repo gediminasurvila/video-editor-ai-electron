@@ -118,23 +118,38 @@ This launches the app with hot-reload for the renderer. The MCP server starts au
 
 ## Using the editor
 
-1. **Create a sequence** — click **+ Sequence** in the toolbar. This adds one video and one audio track and makes the sequence active.
-2. **Import media** — in the **Media** panel (left), click **Import** and choose video/audio files.
-3. **Add to timeline** — double-click a media item to append it to the video track (or use the agent).
-4. **Edit** — on the **Timeline** (bottom):
-   - Click a clip to select it.
-   - Click the ruler to move the **playhead**.
-   - **Split at playhead** razors the selected clip.
-   - **+ Video / + Audio** add tracks.
-5. **Adjust properties** — select a clip and open the **Inspector** tab (right) to change position, scale, rotation, and opacity.
-6. **Preview** — press **▶** to play; the WebGL engine composites the active frame on the canvas.
-7. **Save / Open** — toolbar **Save** writes a `.aivp` project file; **Open** loads one.
-8. **Export** — toolbar **Export** renders the active sequence to an `.mp4` via the FFmpeg sidecar.
+It's built to be simple — closer to Camtasia/ScreenFlow than to Premiere. No setup required:
+
+1. **Import** — click **+ Import** (or just **drag video/audio files onto the window**). A project is created automatically and your clip lands on the timeline, ready to play. No AI needed.
+2. **Edit directly on the timeline** (bottom):
+   - **Drag a clip** to move it; **drag its left/right edge** to trim.
+   - **Drag the ruler** to scrub the playhead.
+   - Clips **snap** to the playhead and to each other.
+   - **✂ Split** cuts the selected clip at the playhead; **🗑 Delete** removes it.
+   - **− / Fit / +** zoom the timeline.
+3. **Adjust properties** — select a clip; the **Properties** panel (right) sets position, scale, rotation, opacity.
+4. **Preview** — press **▶** (or Space); the WebGL engine composites the frame on the canvas.
+5. **Save / Open** — **Save** writes a `.aivp` project; **Open** loads one.
+6. **Export** — **⬆ Export** renders to `.mp4` via the bundled FFmpeg, with progress in the toolbar.
+
+### Keyboard shortcuts
+
+| Key | Action |
+| --- | --- |
+| `Space` | Play / pause |
+| `S` or `B` | Split selected clip at playhead |
+| `Delete` / `Backspace` | Delete selected clip |
+| `←` / `→` | Nudge playhead (hold `Shift` = 1s) |
+| `Home` | Jump to start |
+| `⌘/Ctrl+Z` / `⌘/Ctrl+Shift+Z` | Undo / redo |
+| `⌘/Ctrl+I` | Import media |
+
+The **✨ AI assistant** is an optional tab — everything above works without it.
 
 ## Using the in-app agent
 
-1. Open the **Agent** tab (right panel).
-2. Paste your **Anthropic API key** when prompted (stored locally; moves to the OS keychain in a later release).
+1. Open the **✨ AI assistant** tab (right panel).
+2. Paste your **Anthropic API key** when prompted (or set it in **Settings**; stored locally, moves to the OS keychain in a later release).
 3. Ask it to edit, e.g.:
    - "Import ~/Videos/clip.mp4 and add it to the timeline."
    - "Split the first clip at 5 seconds and delete the second half."

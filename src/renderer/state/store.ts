@@ -16,6 +16,8 @@ interface EditorState {
   project: Project
   selectedClipId: string | null
   playhead: number
+  /** Whether the preview is playing (lifted here so shortcuts can toggle it). */
+  playing: boolean
   /** Path of the open .aivp file, if saved. */
   filePath: string | null
   past: Project[]
@@ -26,6 +28,8 @@ interface EditorState {
   commit: (mutator: (draft: Project) => void) => void
   select: (clipId: string | null) => void
   setPlayhead: (t: number) => void
+  setPlaying: (playing: boolean) => void
+  togglePlay: () => void
   undo: () => void
   redo: () => void
 }
@@ -36,12 +40,21 @@ export const useEditor = create<EditorState>((set) => ({
   project: emptyProject(),
   selectedClipId: null,
   playhead: 0,
+  playing: false,
   filePath: null,
   past: [],
   future: [],
 
   setProject: (project, filePath = null) =>
-    set({ project, filePath, past: [], future: [], selectedClipId: null, playhead: 0 }),
+    set({
+      project,
+      filePath,
+      past: [],
+      future: [],
+      selectedClipId: null,
+      playhead: 0,
+      playing: false
+    }),
 
   commit: (mutator) =>
     set((state) => {
@@ -53,6 +66,8 @@ export const useEditor = create<EditorState>((set) => ({
 
   select: (clipId) => set({ selectedClipId: clipId }),
   setPlayhead: (t) => set({ playhead: Math.max(0, t) }),
+  setPlaying: (playing) => set({ playing }),
+  togglePlay: () => set((s) => ({ playing: !s.playing })),
 
   undo: () =>
     set((state) => {

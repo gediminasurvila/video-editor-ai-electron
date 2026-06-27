@@ -80,6 +80,15 @@ function registerIpc(): void {
     return r.canceled ? null : r.filePath
   })
 
+  ipcMain.handle(IpcChannels.exportDialog, async (_e, defaultName: string) => {
+    const r = await dialog.showSaveDialog(mainWindow!, {
+      title: 'Export video',
+      defaultPath: defaultName,
+      filters: [{ name: 'MP4 Video', extensions: ['mp4'] }]
+    })
+    return r.canceled ? null : r.filePath
+  })
+
   ipcMain.handle(IpcChannels.loadProject, (_e, path: string) => loadProject(path))
   ipcMain.handle(IpcChannels.saveProject, (_e, path: string, project: Project) =>
     saveProject(path, project)

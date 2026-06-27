@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels, IpcEvents } from '@shared/ipc'
 import type { ProbeResult, RunCommandRequest, RunCommandResponse, McpStatus } from '@shared/ipc'
 import type { Project } from '@shared/schema'
@@ -14,6 +14,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.readMediaBytes, filePath),
 
   openMediaDialog: (): Promise<string[]> => ipcRenderer.invoke(IpcChannels.openMediaDialog),
+  /** Resolve the absolute path of a File dropped onto the window. */
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   openProjectDialog: (): Promise<string | null> =>
     ipcRenderer.invoke(IpcChannels.openProjectDialog),
   saveProjectDialog: (): Promise<string | null> =>
@@ -21,6 +23,8 @@ const api = {
   loadProject: (path: string): Promise<Project> => ipcRenderer.invoke(IpcChannels.loadProject, path),
   saveProject: (path: string, project: Project): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.saveProject, path, project),
+  exportDialog: (defaultName: string): Promise<string | null> =>
+    ipcRenderer.invoke(IpcChannels.exportDialog, defaultName),
 
   exportSequence: (project: Project, sequenceId: string, outPath: string): Promise<void> =>
     ipcRenderer.invoke(IpcChannels.exportSequence, project, sequenceId, outPath),

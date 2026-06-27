@@ -1,11 +1,33 @@
+import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { runCommand } from '../../commands'
-import { clipDuration } from '@shared/schema'
+import { addMediaToTimeline } from '../../actions/quickActions'
+import { snapTime } from '../../timeline/snap'
+import { clipDuration, type Clip } from '@shared/schema'
 
-const PX_PER_SEC = 50
-const TRACK_HEIGHT = 56
+const TRACK_HEIGHT = 60
 const LABEL_WIDTH = 96
+const EDGE_PX = 8 // hit zone for edge-trimming
+const MIN_DUR = 0.1 // seconds
+const SNAP_PX = 8
+
+type DragMode = 'move' | 'trim-left' | 'trim-right'
+interface Drag {
+  clipId: string
+  trackId: string
+  mode: DragMode
+  startX: number
+  origStart: number
+  origIn: number
+  origOut: number
+  mediaDuration: number
+  // live preview values while dragging
+  start: number
+  inPoint: number
+  outPoint: number
+  moved: boolean
+}
 
 export function Timeline(): JSX.Element {
   const project = useEditor((s) => s.project)
@@ -15,17 +37,156 @@ export function Timeline(): JSX.Element {
   const select = useEditor((s) => s.select)
   const seq = activeSequence(project)
 
-  function onRulerClick(e: React.MouseEvent): void {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    setPlayhead(Math.max(0, x / PX_PER_SEC))
+  const [pxPerSec, setPxPerSec] = useState(50)
+  const [drag, setDrag] = useState<Drag | null>(null)
+  const laneRef = useRef<HTMLDivElement>(null)
+
+  // ----- helpers -----
+  const mediaById = new Map(project.mediaPool.map((m) => [m.id, m]))
+
+  function snapPoints(exceptClipId?: string): number[] {
+    const pts = [0, playhead]
+    for (const t of seq?.tracks ?? []) {
+      for (const c of t.clips) {
+        if (c.id === exceptClipId) continue
+        pts.push(c.start, c.start + clipDuration(c))
+      }
+    }
+    return pts
+  }
+
+  function timeAtClientX(clientX: number): number {
+    const lane = laneRef.current
+    if (!lane) return 0
+    const rect = lane.getBoundingClientRect()
+    return Math.max(0, (clientX - rect.left + lane.scrollLeft) / pxPerSec)
+  }
+
+  // ----- scrubbing the playhead -----
+  function onRulerPointerDown(e: React.PointerEvent): void {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setPlayhead(timeAtClientX(e.clientX))
+  }
+  function onRulerPointerMove(e: React.PointerEvent): void {
+    if (e.buttons === 1) setPlayhead(timeAtClientX(e.clientX))
+  }
+
+  // ----- clip drag (move / trim) -----
+  function onClipPointerDown(e: React.PointerEvent, clip: Clip, trackId: string): void {
+    e.stopPropagation()
+    select(clip.id)
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    const offsetX = e.clientX - rect.left
+    const width = rect.width
+    let mode: DragMode = 'move'
+    if (offsetX <= EDGE_PX) mode = 'trim-left'
+    else if (offsetX >= width - EDGE_PX) mode = 'trim-right'
+
+    setDrag({
+      clipId: clip.id,
+      trackId,
+      mode,
+      startX: e.clientX,
+      origStart: clip.start,
+      origIn: clip.inPoint,
+      origOut: clip.outPoint,
+      mediaDuration: mediaById.get(clip.mediaId)?.duration ?? clip.outPoint,
+      start: clip.start,
+      inPoint: clip.inPoint,
+      outPoint: clip.outPoint,
+      moved: false
+    })
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  useEffect(() => {
+    if (!drag) return
+    const onMove = (e: PointerEvent): void => {
+      const deltaSec = (e.clientX - drag.startX) / pxPerSec
+      const points = snapPoints(drag.clipId)
+      setDrag((d) => {
+        if (!d) return d
+        if (d.mode === 'move') {
+          let start = Math.max(0, d.origStart + deltaSec)
+          const dur = d.origOut - d.origIn
+          const snappedStart = snapTime(start, points, SNAP_PX / pxPerSec)
+          const snappedEnd = snapTime(start + dur, points, SNAP_PX / pxPerSec)
+          start = snappedStart !== start ? snappedStart : snappedEnd - dur
+          start = Math.max(0, start)
+          return { ...d, start, moved: true }
+        }
+        if (d.mode === 'trim-left') {
+          let start = snapTime(d.origStart + deltaSec, points, SNAP_PX / pxPerSec)
+          let inPoint = d.origIn + (start - d.origStart)
+          if (inPoint < 0) {
+            start -= inPoint
+            inPoint = 0
+          }
+          if (d.origOut - inPoint < MIN_DUR) {
+            inPoint = d.origOut - MIN_DUR
+            start = d.origStart + (inPoint - d.origIn)
+          }
+          return { ...d, start: Math.max(0, start), inPoint, moved: true }
+        }
+        // trim-right
+        const end = snapTime(d.origStart + (d.origOut - d.origIn) + deltaSec, points, SNAP_PX / pxPerSec)
+        let outPoint = d.origIn + (end - d.origStart)
+        outPoint = Math.min(d.mediaDuration, Math.max(d.origIn + MIN_DUR, outPoint))
+        return { ...d, outPoint, moved: true }
+      })
+    }
+    const onUp = (): void => {
+      setDrag((d) => {
+        if (d && d.moved) {
+          useEditor.getState().commit((p) => {
+            const sequence = p.sequences.find((s) => s.id === p.activeSequenceId)
+            for (const t of sequence?.tracks ?? []) {
+              const c = t.clips.find((x) => x.id === d.clipId)
+              if (c) {
+                c.start = d.start
+                c.inPoint = d.inPoint
+                c.outPoint = d.outPoint
+                return
+              }
+            }
+          })
+        }
+        return null
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [drag, pxPerSec])
+
+  // ----- drop media from the bin -----
+  function onLaneDrop(e: React.DragEvent): void {
+    const mediaId = e.dataTransfer.getData('application/x-media-id')
+    if (!mediaId) return
+    e.preventDefault()
+    addMediaToTimeline(mediaId, timeAtClientX(e.clientX))
+  }
+
+  function fitZoom(): void {
+    const lane = laneRef.current
+    const dur = seq
+      ? Math.max(
+          5,
+          ...seq.tracks.flatMap((t) => t.clips.map((c) => c.start + clipDuration(c)))
+        )
+      : 10
+    const width = (lane?.clientWidth ?? 800) - 24
+    setPxPerSec(Math.min(200, Math.max(10, width / dur)))
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: theme.color.panel }}>
       <div
         style={{
-          height: 32,
+          height: 34,
           display: 'flex',
           alignItems: 'center',
           gap: theme.space.sm,
@@ -34,47 +195,66 @@ export function Timeline(): JSX.Element {
         }}
       >
         <strong style={{ fontSize: theme.font.size.sm }}>Timeline</strong>
-        <button onClick={() => runCommand('add_track', { type: 'video' })}>+ Video</button>
-        <button onClick={() => runCommand('add_track', { type: 'audio' })}>+ Audio</button>
         <button
           disabled={!selectedClipId}
           onClick={() =>
             selectedClipId && runCommand('split_clip', { clipId: selectedClipId, at: playhead })
           }
+          title="Split the selected clip at the playhead (S)"
         >
-          Split at playhead
+          ✂ Split
+        </button>
+        <button
+          disabled={!selectedClipId}
+          onClick={() => selectedClipId && runCommand('delete_clip', { clipId: selectedClipId })}
+          title="Delete the selected clip (Delete)"
+        >
+          🗑 Delete
+        </button>
+        <div style={{ flex: 1 }} />
+        <button onClick={() => setPxPerSec((z) => Math.max(10, z / 1.5))} title="Zoom out">
+          −
+        </button>
+        <button onClick={fitZoom} title="Fit timeline">
+          Fit
+        </button>
+        <button onClick={() => setPxPerSec((z) => Math.min(200, z * 1.5))} title="Zoom in">
+          +
         </button>
       </div>
 
       {!seq ? (
-        <div style={{ padding: theme.space.md, color: theme.color.textDim }}>
-          No active sequence.
+        <div style={{ padding: theme.space.lg, color: theme.color.textDim, fontSize: theme.font.size.sm }}>
+          Import a video to start editing.
         </div>
       ) : (
-        <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+        <div ref={laneRef} style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
           {/* Ruler */}
           <div style={{ display: 'flex', position: 'sticky', top: 0, zIndex: 2 }}>
             <div style={{ width: LABEL_WIDTH, background: theme.color.panel }} />
             <div
-              onClick={onRulerClick}
+              onPointerDown={onRulerPointerDown}
+              onPointerMove={onRulerPointerMove}
               style={{
                 position: 'relative',
-                height: 20,
+                height: 22,
                 flex: 1,
                 background: theme.color.panelAlt,
                 borderBottom: `1px solid ${theme.color.border}`,
                 cursor: 'text'
               }}
             >
-              {Array.from({ length: 60 }).map((_, i) => (
+              {Array.from({ length: 120 }).map((_, i) => (
                 <div
                   key={i}
                   style={{
                     position: 'absolute',
-                    left: i * PX_PER_SEC,
+                    left: i * pxPerSec,
                     fontSize: 9,
                     color: theme.color.textDim,
-                    paddingLeft: 2
+                    paddingLeft: 3,
+                    borderLeft: `1px solid ${theme.color.border}`,
+                    height: 22
                   }}
                 >
                   {i}s
@@ -96,12 +276,17 @@ export function Timeline(): JSX.Element {
                   color: theme.color.textDim,
                   background: theme.color.panel,
                   position: 'sticky',
-                  left: 0
+                  left: 0,
+                  zIndex: 1
                 }}
               >
-                {track.name}
+                {track.type === 'video' ? '🎬' : '🔊'} {track.name}
               </div>
               <div
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes('application/x-media-id')) e.preventDefault()
+                }}
+                onDrop={onLaneDrop}
                 style={{
                   position: 'relative',
                   flex: 1,
@@ -110,30 +295,39 @@ export function Timeline(): JSX.Element {
                 }}
               >
                 {track.clips.map((clip) => {
-                  const media = project.mediaPool.find((m) => m.id === clip.mediaId)
+                  const live = drag && drag.clipId === clip.id ? drag : null
+                  const start = live ? live.start : clip.start
+                  const dur = live ? live.outPoint - live.inPoint : clipDuration(clip)
+                  const media = mediaById.get(clip.mediaId)
+                  const selected = selectedClipId === clip.id
                   return (
                     <div
                       key={clip.id}
-                      onClick={() => select(clip.id)}
+                      onPointerDown={(e) => onClipPointerDown(e, clip, track.id)}
                       title={media?.name}
                       style={{
                         position: 'absolute',
-                        left: clip.start * PX_PER_SEC,
-                        width: clipDuration(clip) * PX_PER_SEC,
-                        top: 4,
-                        bottom: 4,
-                        background: track.type === 'video' ? theme.color.clip : theme.color.clipAudio,
-                        border: `2px solid ${
-                          selectedClipId === clip.id ? theme.color.accent : 'transparent'
-                        }`,
+                        left: start * pxPerSec,
+                        width: Math.max(2, dur * pxPerSec),
+                        top: 5,
+                        bottom: 5,
+                        background:
+                          track.type === 'video' ? theme.color.clip : theme.color.clipAudio,
+                        border: `2px solid ${selected ? theme.color.accent : 'transparent'}`,
                         borderRadius: theme.radius.sm,
                         overflow: 'hidden',
-                        padding: '2px 6px',
+                        padding: '3px 8px',
                         fontSize: theme.font.size.sm,
                         whiteSpace: 'nowrap',
-                        cursor: 'pointer'
+                        color: '#fff',
+                        cursor: 'grab',
+                        userSelect: 'none',
+                        boxShadow: selected ? `0 0 0 1px ${theme.color.accent}` : 'none'
                       }}
                     >
+                      {/* edge affordances */}
+                      <Edge side="left" />
+                      <Edge side="right" />
                       {media?.name ?? 'clip'}
                     </div>
                   )
@@ -148,7 +342,7 @@ export function Timeline(): JSX.Element {
               position: 'absolute',
               top: 0,
               bottom: 0,
-              left: LABEL_WIDTH + playhead * PX_PER_SEC,
+              left: LABEL_WIDTH + playhead * pxPerSec,
               width: 2,
               background: theme.color.danger,
               pointerEvents: 'none',
@@ -158,5 +352,20 @@ export function Timeline(): JSX.Element {
         </div>
       )}
     </div>
+  )
+}
+
+function Edge({ side }: { side: 'left' | 'right' }): JSX.Element {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        [side]: 0,
+        width: EDGE_PX,
+        cursor: 'ew-resize'
+      }}
+    />
   )
 }

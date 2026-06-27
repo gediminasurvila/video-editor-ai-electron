@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { sequenceDuration } from '@shared/schema'
+import { importViaDialog } from '../../actions/quickActions'
 import { Engine } from '../../engine/Engine'
 
 /**
@@ -13,11 +14,12 @@ export function Preview(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<Engine | null>(null)
   const [, forceRedraw] = useState(0)
-  const [playing, setPlaying] = useState(false)
 
   const project = useEditor((s) => s.project)
   const playhead = useEditor((s) => s.playhead)
   const setPlayhead = useEditor((s) => s.setPlayhead)
+  const playing = useEditor((s) => s.playing)
+  const setPlaying = useEditor((s) => s.setPlaying)
   const seq = activeSequence(project)
   const duration = seq ? sequenceDuration(seq) : 0
 
@@ -93,12 +95,23 @@ export function Preview(): JSX.Element {
             }}
           />
         ) : (
-          <span style={{ color: theme.color.textDim }}>No active sequence</span>
+          <div style={{ textAlign: 'center', color: theme.color.textDim }}>
+            <div style={{ fontSize: 40, marginBottom: theme.space.md }}>🎬</div>
+            <p style={{ margin: 0, fontSize: theme.font.size.lg, color: theme.color.text }}>
+              Start your movie
+            </p>
+            <p style={{ margin: `${theme.space.sm}px 0 ${theme.space.md}px` }}>
+              Import a video and it appears here, ready to edit.
+            </p>
+            <button onClick={importViaDialog} style={{ padding: '8px 18px' }}>
+              + Import media
+            </button>
+          </div>
         )}
       </div>
       <div
         style={{
-          height: 40,
+          height: 44,
           display: 'flex',
           alignItems: 'center',
           gap: theme.space.md,
@@ -106,12 +119,23 @@ export function Preview(): JSX.Element {
           borderTop: `1px solid ${theme.color.border}`
         }}
       >
-        <button onClick={() => setPlayhead(0)}>⏮</button>
-        <button onClick={() => setPlaying((p) => !p)}>{playing ? '⏸' : '▶'}</button>
+        <button onClick={() => setPlayhead(0)} title="Go to start (Home)">
+          ⏮
+        </button>
+        <button onClick={() => setPlaying(!playing)} title="Play / pause (Space)" disabled={!seq}>
+          {playing ? '⏸ Pause' : '▶ Play'}
+        </button>
         <span style={{ fontFamily: theme.font.mono, fontSize: theme.font.size.sm }}>
-          {playhead.toFixed(2)}s / {duration.toFixed(2)}s
+          {fmtTime(playhead)} / {fmtTime(duration)}
         </span>
       </div>
     </div>
   )
+}
+
+function fmtTime(s: number): string {
+  const m = Math.floor(s / 60)
+  const sec = Math.floor(s % 60)
+  const cs = Math.floor((s % 1) * 100)
+  return `${m}:${sec.toString().padStart(2, '0')}.${cs.toString().padStart(2, '0')}`
 }

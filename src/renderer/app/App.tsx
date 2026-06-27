@@ -7,15 +7,40 @@ import { Inspector } from '../panels/Inspector/Inspector'
 import { Timeline } from '../panels/Timeline/Timeline'
 import { AgentChat } from '../panels/AgentChat/AgentChat'
 import { SettingsModal } from '../panels/Settings/SettingsModal'
+import { useShortcuts } from '../hooks/useShortcuts'
+import { importFiles } from '../actions/quickActions'
 
 type RightTab = 'inspector' | 'agent'
 
 export function App(): JSX.Element {
-  const [rightTab, setRightTab] = useState<RightTab>('agent')
+  const [rightTab, setRightTab] = useState<RightTab>('inspector')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [dropActive, setDropActive] = useState(false)
+  useShortcuts()
+
+  function onDragOver(e: React.DragEvent): void {
+    if (e.dataTransfer.types.includes('Files')) {
+      e.preventDefault()
+      setDropActive(true)
+    }
+  }
+  function onDrop(e: React.DragEvent): void {
+    if (!e.dataTransfer.types.includes('Files')) return
+    e.preventDefault()
+    setDropActive(false)
+    const paths = Array.from(e.dataTransfer.files)
+      .map((f) => window.api.getPathForFile(f))
+      .filter(Boolean)
+    if (paths.length) void importFiles(paths)
+  }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div
+      style={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}
+      onDragOver={onDragOver}
+      onDragLeave={() => setDropActive(false)}
+      onDrop={onDrop}
+    >
       <Toolbar onOpenSettings={() => setSettingsOpen(true)} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
@@ -27,21 +52,45 @@ export function App(): JSX.Element {
         </div>
         <Panel width={320} border="left">
           <div style={{ display: 'flex', borderBottom: `1px solid ${theme.color.border}` }}>
-            <Tab label="Agent" active={rightTab === 'agent'} onClick={() => setRightTab('agent')} />
             <Tab
-              label="Inspector"
+              label="Properties"
               active={rightTab === 'inspector'}
               onClick={() => setRightTab('inspector')}
             />
+            <Tab
+              label="✨ AI assistant"
+              active={rightTab === 'agent'}
+              onClick={() => setRightTab('agent')}
+            />
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
-            {rightTab === 'agent' ? <AgentChat /> : <Inspector />}
+            {rightTab === 'inspector' ? <Inspector /> : <AgentChat />}
           </div>
         </Panel>
       </div>
       <div style={{ height: 280, borderTop: `1px solid ${theme.color.border}` }}>
         <Timeline />
       </div>
+
+      {dropActive && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(108,140,255,0.12)',
+            border: `2px dashed ${theme.color.accent}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: theme.font.size.lg,
+            color: theme.color.text,
+            pointerEvents: 'none',
+            zIndex: 50
+          }}
+        >
+          Drop files to import
+        </div>
+      )}
     </div>
   )
 }

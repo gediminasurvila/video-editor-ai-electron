@@ -10,6 +10,7 @@ export const IpcChannels = {
   saveProjectDialog: 'project:saveDialog',
   loadProject: 'project:load',
   saveProject: 'project:save',
+  exportDialog: 'export:dialog',
   exportSequence: 'export:run',
   mcpStatus: 'mcp:status'
 } as const
