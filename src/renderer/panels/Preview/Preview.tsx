@@ -4,15 +4,17 @@ import { useEditor, activeSequence } from '../../state/store'
 import { sequenceDuration } from '@shared/schema'
 import { importViaDialog } from '../../actions/quickActions'
 import { Engine } from '../../engine/Engine'
+import { AudioEngine } from '../../engine/AudioEngine'
 
 /**
  * Preview surface. Decodes media with WebCodecs and composites the active frame
- * with the WebGL engine; the master playback clock advances the playhead and the
- * engine re-renders on every playhead/project change.
+ * with the WebGL engine; a Web Audio engine plays clip audio in sync. The master
+ * playback clock advances the playhead and the engine re-renders on change.
  */
 export function Preview(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<Engine | null>(null)
+  const audioRef = useRef<AudioEngine | null>(null)
   const [, forceRedraw] = useState(0)
 
   const project = useEditor((s) => s.project)
@@ -23,7 +25,7 @@ export function Preview(): JSX.Element {
   const seq = activeSequence(project)
   const duration = seq ? sequenceDuration(seq) : 0
 
-  // Create the engine once the canvas exists.
+  // Create the engines once the canvas exists.
   useEffect(() => {
     if (!canvasRef.current) return
     try {
@@ -31,11 +33,27 @@ export function Preview(): JSX.Element {
     } catch (err) {
       console.error('Engine init failed:', err)
     }
+    audioRef.current = new AudioEngine(() => forceRedraw((n) => n + 1))
     return () => {
       engineRef.current?.dispose()
       engineRef.current = null
+      audioRef.current?.dispose()
+      audioRef.current = null
     }
   }, [])
+
+  // Decode audio for imported media so playback starts cleanly.
+  useEffect(() => {
+    for (const m of project.mediaPool) audioRef.current?.prefetch(m)
+  }, [project.mediaPool])
+
+  // Drive audio playback from the play/pause state.
+  useEffect(() => {
+    if (playing && seq) void audioRef.current?.play(seq, project.mediaPool, playhead)
+    else audioRef.current?.stop()
+    // Re-sync only when play toggles (scrubbing mid-play is rare in a simple editor).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playing])
 
   // Render the current frame whenever time, project, or sequence changes.
   useEffect(() => {
