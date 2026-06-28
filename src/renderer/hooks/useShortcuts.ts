@@ -49,7 +49,8 @@ export function useShortcuts(): void {
         case 'Backspace':
           if (s.selectedClipId) {
             e.preventDefault()
-            void runCommand('delete_clip', { clipId: s.selectedClipId })
+            // Shift+Delete → ripple delete (close gap); plain Delete → leave gap
+            void runCommand('delete_clip', { clipId: s.selectedClipId, ripple: e.shiftKey })
           }
           break
         case 's':

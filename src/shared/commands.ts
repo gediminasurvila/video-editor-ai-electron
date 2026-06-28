@@ -42,7 +42,11 @@ export const commandSchemas = {
   trim_clip: z.object({
     clipId: z.string(),
     inPoint: z.number().min(0).optional(),
-    outPoint: z.number().min(0).optional()
+    outPoint: z.number().min(0).optional(),
+    ripple: z
+      .boolean()
+      .default(false)
+      .describe('When true, shift all clips to the right of the edit point to close the gap')
   }),
   move_clip: z.object({
     clipId: z.string(),
@@ -62,7 +66,11 @@ export const commandSchemas = {
       .optional()
   }),
   delete_clip: z.object({
-    clipId: z.string()
+    clipId: z.string(),
+    ripple: z
+      .boolean()
+      .default(false)
+      .describe('When true, shift all clips to the right of the deleted clip left to close the gap')
   }),
   add_title: z.object({
     text: z.string().default('Title'),
@@ -104,10 +112,10 @@ export const commandDescriptions: Record<CommandName, string> = {
   add_track: 'Add a video or audio track to the active sequence.',
   add_clip: 'Place a media item onto a track at a given timeline position.',
   split_clip: 'Split a clip into two at a timeline position (razor cut).',
-  trim_clip: 'Change a clip\'s source in/out points.',
+  trim_clip: 'Change a clip\'s source in/out points. Pass ripple:true to shift subsequent clips and close the gap.',
   move_clip: 'Move a clip to a new start time and optionally a different track.',
   set_property: 'Set transform properties (position, scale, rotation, opacity) on a clip.',
-  delete_clip: 'Remove a clip from the timeline.',
+  delete_clip: 'Remove a clip from the timeline. Pass ripple:true to shift subsequent clips left and close the gap.',
   add_title: 'Add a text/title clip to a video track.',
   set_title: 'Edit a title clip\'s text and style (font size, color, background).',
   set_audio: 'Set a clip\'s volume and audio/video fade-in and fade-out durations.',
