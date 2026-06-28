@@ -2,7 +2,7 @@ import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { runCommand } from '../../commands'
 import { Header } from '../MediaPanel/MediaPanel'
-import { isTitle, type Keyframe } from '@shared/schema'
+import { isTitle, resolveTransform, type Keyframe } from '@shared/schema'
 
 export function Inspector(): JSX.Element {
   const selectedClipId = useEditor((s) => s.selectedClipId)
@@ -112,15 +112,18 @@ export function Inspector(): JSX.Element {
             <Section title="Keyframes">
               <button
                 onClick={() => {
-                  const local = playhead - clip.start
+                  const local = Math.max(0, playhead - clip.start)
+                  // Use interpolated values so the captured keyframe matches the
+                  // visual state when other keyframes already exist.
+                  const t = resolveTransform(clip, playhead)
                   void runCommand('set_keyframe', {
                     clipId: clip.id,
-                    time: Math.max(0, local),
-                    x: clip.transform.x,
-                    y: clip.transform.y,
-                    scale: clip.transform.scale,
-                    rotation: clip.transform.rotation,
-                    opacity: clip.transform.opacity
+                    time: local,
+                    x: t.x,
+                    y: t.y,
+                    scale: t.scale,
+                    rotation: t.rotation,
+                    opacity: t.opacity
                   })
                 }}
                 style={{ marginBottom: theme.space.sm, width: '100%' }}
@@ -138,7 +141,7 @@ export function Inspector(): JSX.Element {
             </Section>
 
             <button
-              onClick={() => runCommand('delete_clip', { clipId: clip.id })}
+              onClick={() => void runCommand('delete_clip', { clipId: clip.id })}
               style={{ marginTop: theme.space.sm }}
             >
               Delete clip

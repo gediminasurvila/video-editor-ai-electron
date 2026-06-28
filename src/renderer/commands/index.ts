@@ -125,13 +125,21 @@ const handlers: Handlers = {
           throw new Error('Split point is outside the clip')
         }
         const cutSource = clip.inPoint + localOffset
+        // Split keyframes: left half keeps keyframes before the cut; right half
+        // gets keyframes at/after the cut, re-offset relative to the new start.
+        const leftKfs = clip.keyframes.filter((k) => k.time < localOffset)
+        const rightKfs = clip.keyframes
+          .filter((k) => k.time >= localOffset)
+          .map((k) => ({ ...k, time: k.time - localOffset }))
         track.clips.push({
           ...structuredClone(clip),
           id: newId,
           start: at,
-          inPoint: cutSource
+          inPoint: cutSource,
+          keyframes: rightKfs
         })
         clip.outPoint = cutSource
+        clip.keyframes = leftKfs
         return
       }
       throw new Error(`Clip ${clipId} not found`)

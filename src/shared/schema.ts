@@ -100,9 +100,8 @@ function lerpProp(
 }
 
 /**
- * Resolve the effective Transform for a clip at a given time, applying any
- * keyframe animation on top of the clip's static transform values.
- * `time` is seconds from the clip's start on the timeline.
+ * Resolve the effective Transform for a clip at a given absolute timeline time
+ * (in seconds), applying keyframe animation on top of the clip's static values.
  */
 export function resolveTransform(clip: Clip, time: number): Transform {
   const kfs = clip.keyframes
