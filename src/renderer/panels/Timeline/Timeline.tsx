@@ -36,6 +36,11 @@ export function Timeline(): JSX.Element {
   const setPlayhead = useEditor((s) => s.setPlayhead)
   const selectedClipId = useEditor((s) => s.selectedClipId)
   const select = useEditor((s) => s.select)
+  const rangeIn = useEditor((s) => s.rangeIn)
+  const rangeOut = useEditor((s) => s.rangeOut)
+  const setRangeIn = useEditor((s) => s.setRangeIn)
+  const setRangeOut = useEditor((s) => s.setRangeOut)
+  const clearRange = useEditor((s) => s.clearRange)
   const seq = activeSequence(project)
 
   const [pxPerSec, setPxPerSec] = useState(50)
@@ -223,8 +228,42 @@ export function Timeline(): JSX.Element {
           onClick={() => selectedClipId && runCommand('delete_clip', { clipId: selectedClipId })}
           title="Delete the selected clip (Delete)"
         >
-          🗑 Delete
+          Delete
         </button>
+        <button
+          onClick={() => setRangeIn(playhead)}
+          title="Set in-point at playhead (I)"
+        >
+          I
+        </button>
+        <button
+          onClick={() => setRangeOut(playhead)}
+          title="Set out-point at playhead (O)"
+        >
+          O
+        </button>
+        <button
+          disabled={rangeIn === null || rangeOut === null || rangeOut <= (rangeIn ?? 0)}
+          onClick={() => {
+            if (rangeIn !== null && rangeOut !== null) {
+              void runCommand('delete_range', { inPoint: rangeIn, outPoint: rangeOut, ripple: true })
+              clearRange()
+            }
+          }}
+          title="Delete everything between in/out markers and close the gap (X)"
+          style={
+            rangeIn !== null && rangeOut !== null
+              ? { background: theme.color.danger, color: '#fff' }
+              : {}
+          }
+        >
+          Del Range
+        </button>
+        {(rangeIn !== null || rangeOut !== null) && (
+          <button onClick={clearRange} title="Clear in/out markers">
+            Clear I/O
+          </button>
+        )}
         <div style={{ flex: 1 }} />
         <button onClick={() => setPxPerSec((z) => Math.max(10, z / 1.5))} title="Zoom out">
           −
@@ -274,6 +313,48 @@ export function Timeline(): JSX.Element {
                   {i}s
                 </div>
               ))}
+              {/* Range overlay */}
+              {rangeIn !== null && rangeOut !== null && rangeOut > rangeIn && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: rangeIn * pxPerSec,
+                    width: (rangeOut - rangeIn) * pxPerSec,
+                    top: 0,
+                    bottom: 0,
+                    background: 'rgba(255,80,80,0.25)',
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
+              {/* In marker */}
+              {rangeIn !== null && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: rangeIn * pxPerSec,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    background: '#4caf50',
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
+              {/* Out marker */}
+              {rangeOut !== null && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: rangeOut * pxPerSec,
+                    top: 0,
+                    bottom: 0,
+                    width: 2,
+                    background: '#f44336',
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
             </div>
           </div>
 

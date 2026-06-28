@@ -287,6 +287,60 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
+  delete_range: ({ inPoint, outPoint, ripple }) => {
+    if (outPoint <= inPoint) throw new Error('outPoint must be greater than inPoint')
+    const rangeLen = outPoint - inPoint
+    useEditor.getState().commit((p) => {
+      const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
+      if (!seq) throw new Error('No active sequence')
+      for (const track of seq.tracks) {
+        const surviving: typeof track.clips = []
+        for (const clip of track.clips) {
+          const clipEnd = clip.start + clipDuration(clip)
+          // Clip entirely before the range — keep as-is
+          if (clipEnd <= inPoint) {
+            surviving.push(clip)
+            continue
+          }
+          // Clip entirely after the range — keep, ripple shifts it later
+          if (clip.start >= outPoint) {
+            surviving.push(clip)
+            continue
+          }
+          // Clip starts before range and ends inside or after — keep the part before
+          if (clip.start < inPoint) {
+            const beforeDur = inPoint - clip.start
+            const newOutPoint = clip.inPoint + beforeDur
+            surviving.push({ ...clip, outPoint: newOutPoint })
+          }
+          // Clip ends after range — keep the part after as a new clip
+          if (clipEnd > outPoint) {
+            const afterOffset = outPoint - clip.start
+            const newInPoint = clip.inPoint + afterOffset
+            surviving.push({
+              ...clip,
+              id: surviving.some((c) => c.id === clip.id) ? crypto.randomUUID() : clip.id,
+              start: outPoint,
+              inPoint: newInPoint
+            })
+          }
+          // Clip entirely inside the range — drop it (don't push)
+        }
+        track.clips = surviving
+      }
+      if (ripple) {
+        for (const track of seq.tracks) {
+          for (const clip of track.clips) {
+            if (clip.start >= outPoint) {
+              clip.start -= rangeLen
+            }
+          }
+        }
+      }
+    })
+    return { ok: true }
+  },
+
   get_timeline_state: () => useEditor.getState().project,
 
   export: async ({ outPath }) => {

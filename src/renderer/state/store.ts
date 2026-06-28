@@ -22,6 +22,9 @@ interface EditorState {
   filePath: string | null
   past: Project[]
   future: Project[]
+  /** Timeline in/out range markers (seconds, UI-only — not saved in the project). */
+  rangeIn: number | null
+  rangeOut: number | null
 
   setProject: (project: Project, filePath?: string | null) => void
   /** Apply a mutation as an undoable transaction. */
@@ -32,6 +35,9 @@ interface EditorState {
   togglePlay: () => void
   undo: () => void
   redo: () => void
+  setRangeIn: (t: number | null) => void
+  setRangeOut: (t: number | null) => void
+  clearRange: () => void
 }
 
 const HISTORY_LIMIT = 100
@@ -44,6 +50,8 @@ export const useEditor = create<EditorState>((set) => ({
   filePath: null,
   past: [],
   future: [],
+  rangeIn: null,
+  rangeOut: null,
 
   setProject: (project, filePath = null) =>
     set({
@@ -89,7 +97,11 @@ export const useEditor = create<EditorState>((set) => ({
         past: [...state.past, state.project].slice(-HISTORY_LIMIT),
         future: state.future.slice(1)
       }
-    })
+    }),
+
+  setRangeIn: (t) => set({ rangeIn: t }),
+  setRangeOut: (t) => set({ rangeOut: t }),
+  clearRange: () => set({ rangeIn: null, rangeOut: null })
 }))
 
 export function activeSequence(project: Project) {

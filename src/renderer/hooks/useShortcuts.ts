@@ -52,6 +52,25 @@ export function useShortcuts(): void {
             void runCommand('delete_clip', { clipId: s.selectedClipId })
           }
           break
+        case 'i':
+          e.preventDefault()
+          s.setRangeIn(s.playhead)
+          break
+        case 'o':
+          e.preventDefault()
+          s.setRangeOut(s.playhead)
+          break
+        case 'x':
+        case 'X':
+          if (s.rangeIn !== null && s.rangeOut !== null && s.rangeOut > s.rangeIn) {
+            e.preventDefault()
+            void runCommand('delete_range', { inPoint: s.rangeIn, outPoint: s.rangeOut, ripple: true })
+            s.clearRange()
+          }
+          break
+        case 'Escape':
+          s.clearRange()
+          break
         case 's':
         case 'S':
         case 'b':
