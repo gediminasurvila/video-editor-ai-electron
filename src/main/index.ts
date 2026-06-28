@@ -142,7 +142,7 @@ function registerIpc(): void {
 
   ipcMain.handle(
     IpcChannels.transcribeMedia,
-    async (_e, filePath: string, apiKey: string): Promise<TranscriptWord[]> => {
+    async (_e, filePath: string, apiKey: string, language?: string): Promise<TranscriptWord[]> => {
       const wavPath = join(tmpdir(), `video-ai-transcript-${Date.now()}.wav`)
       try {
         await extractAudio(filePath, wavPath)
@@ -160,6 +160,7 @@ function registerIpc(): void {
         formData.append('model', 'whisper-1')
         formData.append('response_format', 'verbose_json')
         formData.append('timestamp_granularities[]', 'word')
+        if (language) formData.append('language', language)
         const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
           method: 'POST',
           headers: { Authorization: `Bearer ${apiKey}` },

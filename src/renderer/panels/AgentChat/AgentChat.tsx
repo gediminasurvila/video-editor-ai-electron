@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useSettings } from '../../state/settings'
 import { ClaudeProvider } from '../../ai/providers/claude'
@@ -17,6 +17,13 @@ export function AgentChat(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const providerRef = useRef<AgentProvider | null>(null)
   const startedRef = useRef(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when new entries arrive
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [entries, busy])
 
   function getProvider(): AgentProvider {
     if (!providerRef.current) {
@@ -38,6 +45,8 @@ export function AgentChat(): JSX.Element {
       return
     }
     setInput('')
+    // Keep focus on the textarea after clearing
+    requestAnimationFrame(() => textareaRef.current?.focus())
     push({ kind: 'user', text: message })
     setBusy(true)
     try {
@@ -71,13 +80,18 @@ export function AgentChat(): JSX.Element {
       <div style={{ flex: 1, overflowY: 'auto', padding: theme.space.md }}>
         {entries.length === 0 && (
           <p style={{ color: theme.color.textDim, fontSize: theme.font.size.sm }}>
-            Ask the agent to edit your timeline, e.g. “split the first clip at 5s”.
+            Ask the agent to edit your timeline — e.g. "remove all the ums from my transcript", "add a title at the start", "export to ~/Desktop/final.mp4".
           </p>
         )}
         {entries.map((e, i) => (
           <Bubble key={i} entry={e} />
         ))}
-        {busy && <div style={{ color: theme.color.textDim }}>…thinking</div>}
+        {busy && (
+          <div style={{ color: theme.color.textDim, fontSize: theme.font.size.sm }}>
+            ●●● thinking
+          </div>
+        )}
+        <div ref={bottomRef} />
       </div>
 
       {!apiKey && (
@@ -100,6 +114,7 @@ export function AgentChat(): JSX.Element {
         }}
       >
         <textarea
+          ref={textareaRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -109,10 +124,10 @@ export function AgentChat(): JSX.Element {
             }
           }}
           rows={2}
-          placeholder="Message the agent…"
+          placeholder="Message the agent… (Enter to send, Shift+Enter for newline)"
           style={{ flex: 1, resize: 'none' }}
         />
-        <button onClick={send} disabled={busy}>
+        <button onClick={send} disabled={busy} style={{ alignSelf: 'flex-end' }}>
           Send
         </button>
       </div>
@@ -121,6 +136,7 @@ export function AgentChat(): JSX.Element {
 }
 
 function Bubble({ entry }: { entry: Entry }): JSX.Element {
+  const [copied, setCopied] = useState(false)
   const color =
     entry.kind === 'user'
       ? theme.color.accent
@@ -129,6 +145,16 @@ function Bubble({ entry }: { entry: Entry }): JSX.Element {
         : entry.kind === 'error'
           ? theme.color.danger
           : theme.color.text
+
+  function copy(): void {
+    void navigator.clipboard.writeText(entry.text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  const showCopy = entry.kind === 'assistant' || entry.kind === 'tool'
+
   return (
     <div
       style={{
@@ -136,11 +162,33 @@ function Bubble({ entry }: { entry: Entry }): JSX.Element {
         fontSize: entry.kind === 'tool' ? theme.font.size.sm : theme.font.size.md,
         fontFamily: entry.kind === 'tool' ? theme.font.mono : theme.font.ui,
         color,
-        whiteSpace: 'pre-wrap'
+        whiteSpace: 'pre-wrap',
+        position: 'relative',
+        paddingRight: showCopy ? 28 : 0
       }}
     >
       {entry.kind === 'user' ? '› ' : ''}
       {entry.text}
+      {showCopy && (
+        <button
+          onClick={copy}
+          title="Copy to clipboard"
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            padding: '2px 4px',
+            background: 'transparent',
+            border: 'none',
+            color: copied ? theme.color.accent : theme.color.textDim,
+            cursor: 'pointer',
+            fontSize: 11,
+            opacity: 0.7
+          }}
+        >
+          {copied ? '✓' : '⎘'}
+        </button>
+      )}
     </div>
   )
 }

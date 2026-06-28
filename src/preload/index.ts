@@ -52,8 +52,8 @@ const api = {
     })
   },
 
-  transcribeMedia: (filePath: string, apiKey: string): Promise<TranscriptWord[]> =>
-    ipcRenderer.invoke(IpcChannels.transcribeMedia, filePath, apiKey),
+  transcribeMedia: (filePath: string, apiKey: string, language?: string): Promise<TranscriptWord[]> =>
+    ipcRenderer.invoke(IpcChannels.transcribeMedia, filePath, apiKey, language),
 
   onExportProgress: (cb: (line: string) => void): (() => void) => {
     const listener = (_e: unknown, line: string): void => cb(line)
