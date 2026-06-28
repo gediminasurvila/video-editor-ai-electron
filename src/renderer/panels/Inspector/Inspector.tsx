@@ -12,13 +12,13 @@ export function Inspector(): JSX.Element {
   const clip = seq?.tracks.flatMap((t) => t.clips).find((c) => c.id === selectedClipId) ?? null
 
   function setTransform(key: 'x' | 'y' | 'scale' | 'rotation' | 'opacity', value: number): void {
-    if (clip) runCommand('set_property', { clipId: clip.id, transform: { [key]: value } })
+    if (clip) void runCommand('set_property', { clipId: clip.id, transform: { [key]: value } })
   }
   function setAudio(patch: { volume?: number; fadeIn?: number; fadeOut?: number }): void {
-    if (clip) runCommand('set_audio', { clipId: clip.id, ...patch })
+    if (clip) void runCommand('set_audio', { clipId: clip.id, ...patch })
   }
   function setTitle(patch: { text?: string; fontSize?: number; color?: string }): void {
-    if (clip) runCommand('set_title', { clipId: clip.id, ...patch })
+    if (clip) void runCommand('set_title', { clipId: clip.id, ...patch })
   }
 
   return (
@@ -83,7 +83,7 @@ export function Inspector(): JSX.Element {
                 <select
                   value={clip.transition ? 'dissolve' : 'none'}
                   onChange={(e) =>
-                    runCommand('set_transition', {
+                    void runCommand('set_transition', {
                       clipId: clip.id,
                       type: e.target.value === 'none' ? 'none' : 'dissolve',
                       duration: clip.transition?.duration ?? 1
@@ -102,18 +102,18 @@ export function Inspector(): JSX.Element {
                   step={0.1}
                   min={0.1}
                   onChange={(v) =>
-                    runCommand('set_transition', { clipId: clip.id, type: 'dissolve', duration: v })
+                    void runCommand('set_transition', { clipId: clip.id, type: 'dissolve', duration: v })
                   }
                 />
               )}
             </Section>
 
             <div style={{ display: 'flex', gap: theme.space.sm, marginTop: theme.space.sm }}>
-              <button onClick={() => runCommand('delete_clip', { clipId: clip.id })}>
+              <button onClick={() => void runCommand('delete_clip', { clipId: clip.id })}>
                 Delete clip
               </button>
               <button
-                onClick={() => runCommand('delete_clip', { clipId: clip.id, ripple: true })}
+                onClick={() => void runCommand('delete_clip', { clipId: clip.id, ripple: true })}
                 title="Delete and shift all later clips left to close the gap (Shift+Delete)"
               >
                 Ripple delete
