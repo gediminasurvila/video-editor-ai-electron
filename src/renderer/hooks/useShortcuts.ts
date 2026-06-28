@@ -54,8 +54,10 @@ export function useShortcuts(): void {
           break
         case 'v':
         case 'V':
-          e.preventDefault()
-          s.setToolMode('select')
+          if (!mod) {
+            e.preventDefault()
+            s.setToolMode('select')
+          }
           break
         case 't':
         case 'T':
