@@ -7,6 +7,7 @@ export const IpcChannels = {
   readMediaBytes: 'media:readBytes',
   thumbnails: 'media:thumbnails',
   openMediaDialog: 'media:openDialog',
+  openFolderDialog: 'media:openFolderDialog',
   openProjectDialog: 'project:openDialog',
   saveProjectDialog: 'project:saveDialog',
   loadProject: 'project:load',

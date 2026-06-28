@@ -35,6 +35,22 @@ export const commandSchemas = {
       .optional()
       .describe('Source out-point in seconds; defaults to the media duration')
   }),
+  insert_clips: z.object({
+    clips: z
+      .array(
+        z.object({
+          trackId: z.string(),
+          mediaId: z.string(),
+          at: z.number().min(0).describe('Timeline position where the clip is inserted (seconds)'),
+          inPoint: z.number().min(0).default(0),
+          outPoint: z.number().min(0).optional()
+        })
+      )
+      .min(1)
+      .describe(
+        'Ripple-insert one or more clips at given positions, pushing all existing clips that start at or after the insertion point to the right.'
+      )
+  }),
   split_clip: z.object({
     clipId: z.string(),
     at: z.number().min(0).describe('Timeline position in seconds where the clip is cut')
@@ -63,7 +79,11 @@ export const commandSchemas = {
         rotation: z.number().optional(),
         opacity: z.number().min(0).max(1).optional()
       })
-      .optional()
+      .optional(),
+    speed: z.number().positive().optional().describe('Playback rate: 1 = normal, 2 = 2× speed'),
+    volume: z.number().min(0).max(4).optional().describe('Audio volume: 1 = unchanged'),
+    fadeIn: z.number().min(0).optional(),
+    fadeOut: z.number().min(0).optional()
   }),
   delete_clip: z.object({
     clipId: z.string(),
@@ -148,10 +168,11 @@ export const commandDescriptions: Record<CommandName, string> = {
   create_sequence: 'Create a new sequence (timeline) and make it active.',
   add_track: 'Add a video or audio track to the active sequence.',
   add_clip: 'Place a media item onto a track at a given timeline position.',
+  insert_clips: 'Ripple-insert one or more clips, pushing all existing clips that start at or after each insertion point to the right to make room.',
   split_clip: 'Split a clip into two at a timeline position (razor cut).',
   trim_clip: 'Change a clip\'s source in/out points. Pass ripple:true to shift subsequent clips and close the gap.',
   move_clip: 'Move a clip to a new start time and optionally a different track.',
-  set_property: 'Set transform properties (position, scale, rotation, opacity) on a clip.',
+  set_property: 'Set any combination of transform (position, scale, rotation, opacity), playback speed, or audio volume/fades on a clip.',
   delete_clip: 'Remove a clip from the timeline. Pass ripple:true to shift subsequent clips left and close the gap.',
   add_title: 'Add a text/title clip to a video track.',
   set_title: 'Edit a title clip\'s text and style (font size, color, background).',

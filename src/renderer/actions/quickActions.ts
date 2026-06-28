@@ -55,6 +55,11 @@ export async function importViaDialog(): Promise<void> {
   if (paths.length) await importFiles(paths)
 }
 
+export async function importFolderViaDialog(): Promise<void> {
+  const paths = await window.api.openFolderDialog()
+  if (paths.length) await importFiles(paths)
+}
+
 /**
  * Add an already-imported media item to the timeline. Video files with audio
  * get a linked audio clip on the audio track so they move and trim together.
