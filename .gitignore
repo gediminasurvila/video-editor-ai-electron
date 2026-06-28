@@ -7,3 +7,4 @@ release/
 *.tsbuildinfo
 resources/ffmpeg/*/
 !resources/ffmpeg/.gitkeep
+.claude/worktrees/

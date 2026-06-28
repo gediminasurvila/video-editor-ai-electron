@@ -16,6 +16,7 @@ const api = {
     ipcRenderer.invoke(IpcChannels.thumbnails, filePath, duration, count, height),
 
   openMediaDialog: (): Promise<string[]> => ipcRenderer.invoke(IpcChannels.openMediaDialog),
+  openFolderDialog: (): Promise<string[]> => ipcRenderer.invoke(IpcChannels.openFolderDialog),
   /** Resolve the absolute path of a File dropped onto the window. */
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
   openProjectDialog: (): Promise<string | null> =>

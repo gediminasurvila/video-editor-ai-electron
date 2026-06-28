@@ -2,7 +2,17 @@ import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { runCommand } from '../../commands'
 import { Header } from '../MediaPanel/MediaPanel'
-import { isTitle, resolveTransform, type Keyframe } from '@shared/schema'
+import { clipDuration, isTitle, resolveTransform, type Keyframe } from '@shared/schema'
+
+const ASPECT_PRESETS = [
+  { label: '16:9 — 1920×1080 (Full HD)', w: 1920, h: 1080 },
+  { label: '16:9 — 3840×2160 (4K UHD)', w: 3840, h: 2160 },
+  { label: '16:9 — 1280×720 (HD Ready)', w: 1280, h: 720 },
+  { label: '9:16 — 1080×1920 (Vertical)', w: 1080, h: 1920 },
+  { label: '1:1 — 1080×1080 (Square)', w: 1080, h: 1080 },
+  { label: '4:3 — 1440×1080', w: 1440, h: 1080 }
+]
+const FPS_PRESETS = [23.976, 24, 25, 29.97, 30, 60]
 
 export function Inspector(): JSX.Element {
   const selectedClipId = useEditor((s) => s.selectedClipId)
@@ -27,9 +37,58 @@ export function Inspector(): JSX.Element {
       <Header title="Properties" />
       <div style={{ flex: 1, overflowY: 'auto', padding: theme.space.md }}>
         {!clip ? (
-          <p style={{ color: theme.color.textDim, fontSize: theme.font.size.sm }}>
-            Select a clip to edit its properties.
-          </p>
+          <>
+            <p style={{ color: theme.color.textDim, fontSize: theme.font.size.sm, marginTop: 0 }}>
+              Select a clip — or configure the project below.
+            </p>
+            {seq && (
+              <Section title="Sequence settings">
+                <Row label="Resolution">
+                  <select
+                    value={`${seq.width}x${seq.height}`}
+                    onChange={(e) => {
+                      const [w, h] = e.target.value.split('x').map(Number)
+                      void runCommand('set_project_settings', { width: w, height: h })
+                    }}
+                    style={selectStyle}
+                  >
+                    {ASPECT_PRESETS.map((p) => (
+                      <option key={`${p.w}x${p.h}`} value={`${p.w}x${p.h}`}>
+                        {p.label}
+                      </option>
+                    ))}
+                    {!ASPECT_PRESETS.some((p) => p.w === seq.width && p.h === seq.height) && (
+                      <option value={`${seq.width}x${seq.height}`}>
+                        Custom — {seq.width}×{seq.height}
+                      </option>
+                    )}
+                  </select>
+                </Row>
+                <Row label="Frame rate">
+                  <select
+                    value={seq.fps}
+                    onChange={(e) => void runCommand('set_project_settings', { fps: Number(e.target.value) })}
+                    style={selectStyle}
+                  >
+                    {FPS_PRESETS.map((f) => (
+                      <option key={f} value={f}>{f} fps</option>
+                    ))}
+                    {!FPS_PRESETS.includes(seq.fps) && (
+                      <option value={seq.fps}>{seq.fps} fps (custom)</option>
+                    )}
+                  </select>
+                </Row>
+                <Row label="Name">
+                  <input
+                    type="text"
+                    defaultValue={project.name}
+                    onBlur={(e) => void runCommand('set_project_settings', { name: e.target.value })}
+                    style={{ width: 140 }}
+                  />
+                </Row>
+              </Section>
+            )}
+          </>
         ) : (
           <>
             {isTitle(clip) && clip.title && (
@@ -62,6 +121,24 @@ export function Inspector(): JSX.Element {
               <NumField label="Scale" value={clip.transform.scale} step={0.05} onChange={(v) => setTransform('scale', v)} />
               <NumField label="Rotation" value={clip.transform.rotation} onChange={(v) => setTransform('rotation', v)} />
               <NumField label="Opacity" value={clip.transform.opacity} step={0.05} min={0} max={1} onChange={(v) => setTransform('opacity', v)} />
+            </Section>
+
+            <Section title="Clip">
+              <Row label="Duration">
+                <span style={{ color: theme.color.textDim, fontSize: theme.font.size.sm }}>
+                  {clipDuration(clip).toFixed(2)}s
+                </span>
+              </Row>
+              {clip.kind === 'media' && (
+                <NumField
+                  label="Speed"
+                  value={Math.round((clipDuration(clip) > 0 ? (clip.outPoint - clip.inPoint) / clipDuration(clip) : 1) * 100) / 100}
+                  step={0.25}
+                  min={0.1}
+                  max={8}
+                  onChange={(v) => void runCommand('set_property', { clipId: clip.id, speed: v })}
+                />
+              )}
             </Section>
 
             <Section title="Audio & fades">

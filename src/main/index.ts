@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { readFile, unlink, stat } from 'node:fs/promises'
+import { readFile, readdir, unlink, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
 import { IpcChannels, IpcEvents, type RunCommandResponse, type TranscriptWord } from '@shared/ipc'
@@ -70,6 +70,29 @@ function registerIpc(): void {
       properties: ['openFile', 'multiSelections']
     })
     return r.canceled ? [] : r.filePaths
+  })
+
+  ipcMain.handle(IpcChannels.openFolderDialog, async () => {
+    const r = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openDirectory']
+    })
+    if (r.canceled || !r.filePaths[0]) return []
+    const folderPath = r.filePaths[0]
+    const MEDIA_EXTS = new Set(['mp4', 'mov', 'm4v', 'webm', 'mkv', 'mp3', 'wav', 'aac', 'flac', 'm4a', 'webp', 'png', 'jpg', 'jpeg'])
+    const results: string[] = []
+    async function scan(dir: string): Promise<void> {
+      const entries = await readdir(dir, { withFileTypes: true })
+      for (const e of entries) {
+        const full = join(dir, e.name)
+        if (e.isDirectory()) await scan(full)
+        else {
+          const ext = e.name.split('.').pop()?.toLowerCase() ?? ''
+          if (MEDIA_EXTS.has(ext)) results.push(full)
+        }
+      }
+    }
+    await scan(folderPath)
+    return results
   })
 
   ipcMain.handle(IpcChannels.openProjectDialog, async () => {

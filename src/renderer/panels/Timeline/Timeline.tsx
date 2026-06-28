@@ -721,9 +721,12 @@ export function Timeline(): JSX.Element {
                     const selected = selectedClipId === clip.id
                     const title = isTitle(clip)
                     const linked = !!clip.linkedClipId
+                    const offline = !title && !!clip.mediaId && !media
                     const widthPx = Math.max(2, dur * pxPerSec)
 
-                    const bg = title
+                    const bg = offline
+                      ? '#6a2020'
+                      : title
                       ? 'linear-gradient(135deg,#5a4a8c,#8c5a7a)'
                       : isVideoTrack
                         ? linked
@@ -788,6 +791,25 @@ export function Timeline(): JSX.Element {
                             }}
                           >
                             ⤫
+                          </div>
+                        )}
+                        {/* Offline indicator */}
+                        {offline && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 11,
+                              color: '#e06050',
+                              fontWeight: 'bold',
+                              gap: 3,
+                              pointerEvents: 'none'
+                            }}
+                          >
+                            ⚠ Media Offline
                           </div>
                         )}
                         {/* Linked indicator */}

@@ -115,6 +115,45 @@ const handlers: Handlers = {
     return { clipId: id }
   },
 
+  insert_clips: ({ clips }) => {
+    const newIds: string[] = []
+    useEditor.getState().commit((p) => {
+      const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
+      if (!seq) throw new Error('No active sequence')
+      for (const entry of clips) {
+        const media = p.mediaPool.find((m) => m.id === entry.mediaId)
+        if (!media) throw new Error(`Media ${entry.mediaId} not found`)
+        const track = seq.tracks.find((t) => t.id === entry.trackId)
+        if (!track) throw new Error(`Track ${entry.trackId} not found`)
+        const clipOut = entry.outPoint ?? media.duration
+        const dur = clipOut - entry.inPoint
+        // Ripple: push existing clips that start at or after the insertion point
+        for (const t of seq.tracks) {
+          for (const c of t.clips) {
+            if (c.start >= entry.at) c.start += dur
+          }
+        }
+        const id = crypto.randomUUID()
+        track.clips.push({
+          id,
+          kind: 'media',
+          mediaId: entry.mediaId,
+          start: entry.at,
+          inPoint: entry.inPoint,
+          outPoint: clipOut,
+          transform: { x: 0, y: 0, scale: 1, rotation: 0, opacity: 1 },
+          effects: [],
+          volume: 1,
+          fadeIn: 0,
+          fadeOut: 0,
+          keyframes: []
+        })
+        newIds.push(id)
+      }
+    })
+    return { clipIds: newIds }
+  },
+
   split_clip: ({ clipId, at }) => {
     const newId = crypto.randomUUID()
     useEditor.getState().commit((p) => {
@@ -234,13 +273,34 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
-  set_property: ({ clipId, transform }) => {
+  set_property: ({ clipId, transform, speed, volume, fadeIn, fadeOut }) => {
+    // Validate inputs before touching state
+    if (speed !== undefined && speed <= 0) throw new Error(`speed must be > 0 (got ${speed})`)
+    if (volume !== undefined && (volume < 0 || volume > 4)) throw new Error(`volume must be between 0 and 4 (got ${volume})`)
+    if (transform?.opacity !== undefined && (transform.opacity < 0 || transform.opacity > 1))
+      throw new Error(`opacity must be between 0 and 1 (got ${transform.opacity})`)
+    if (transform?.scale !== undefined && transform.scale <= 0)
+      throw new Error(`scale must be > 0 (got ${transform.scale})`)
+
     useEditor.getState().commit((p) => {
       const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
       for (const track of seq?.tracks ?? []) {
         const clip = track.clips.find((c) => c.id === clipId)
         if (clip) {
+          // Merge transform preserving existing fields that weren't specified
           if (transform) Object.assign(clip.transform, transform)
+          // Apply speed: rescale all clip-relative keyframe times proportionally,
+          // then adjust the clip's outPoint to reflect the new duration.
+          if (speed !== undefined && clip.kind === 'media') {
+            const oldDur = clipDuration(clip)
+            const newDur = oldDur / speed
+            const ratio = newDur / (oldDur || newDur)
+            clip.keyframes = clip.keyframes.map((kf) => ({ ...kf, time: kf.time * ratio }))
+            clip.outPoint = clip.inPoint + (clip.outPoint - clip.inPoint) / speed
+          }
+          if (volume !== undefined) clip.volume = volume
+          if (fadeIn !== undefined) clip.fadeIn = fadeIn
+          if (fadeOut !== undefined) clip.fadeOut = fadeOut
           return
         }
       }
