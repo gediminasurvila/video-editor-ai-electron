@@ -12,6 +12,8 @@ function emptyProject(): Project {
   }
 }
 
+export type ToolMode = 'select' | 'trim' | 'cut'
+
 interface EditorState {
   project: Project
   selectedClipId: string | null
@@ -25,6 +27,8 @@ interface EditorState {
   /** Timeline in/out range markers (seconds, UI-only — not saved in the project). */
   rangeIn: number | null
   rangeOut: number | null
+  /** Active editing tool (V = select, T = trim, C = cut/razor). */
+  toolMode: ToolMode
 
   setProject: (project: Project, filePath?: string | null) => void
   /** Apply a mutation as an undoable transaction. */
@@ -38,6 +42,7 @@ interface EditorState {
   setRangeIn: (t: number | null) => void
   setRangeOut: (t: number | null) => void
   clearRange: () => void
+  setToolMode: (mode: ToolMode) => void
 }
 
 const HISTORY_LIMIT = 100
@@ -52,6 +57,7 @@ export const useEditor = create<EditorState>((set) => ({
   future: [],
   rangeIn: null,
   rangeOut: null,
+  toolMode: 'select',
 
   setProject: (project, filePath = null) =>
     set({
@@ -101,7 +107,9 @@ export const useEditor = create<EditorState>((set) => ({
 
   setRangeIn: (t) => set({ rangeIn: t }),
   setRangeOut: (t) => set({ rangeOut: t }),
-  clearRange: () => set({ rangeIn: null, rangeOut: null })
+  clearRange: () => set({ rangeIn: null, rangeOut: null }),
+
+  setToolMode: (mode) => set({ toolMode: mode })
 }))
 
 export function activeSequence(project: Project) {

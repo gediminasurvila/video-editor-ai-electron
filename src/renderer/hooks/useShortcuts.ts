@@ -72,6 +72,27 @@ export function useShortcuts(): void {
         case 'Escape':
           s.clearRange()
           break
+        case 'v':
+        case 'V':
+          if (!mod) {
+            e.preventDefault()
+            s.setToolMode('select')
+          }
+          break
+        case 't':
+        case 'T':
+          if (!mod) {
+            e.preventDefault()
+            s.setToolMode('trim')
+          }
+          break
+        case 'c':
+        case 'C':
+          if (!mod) {
+            e.preventDefault()
+            s.setToolMode('cut')
+          }
+          break
         case 's':
         case 'S':
         case 'b':

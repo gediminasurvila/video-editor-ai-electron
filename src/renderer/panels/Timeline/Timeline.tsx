@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
-import { useEditor, activeSequence } from '../../state/store'
+import { useEditor, activeSequence, type ToolMode } from '../../state/store'
 import { useThumbnails } from '../../state/thumbnails'
 import { runCommand } from '../../commands'
 import { addMediaToTimeline } from '../../actions/quickActions'
@@ -41,6 +41,8 @@ export function Timeline(): JSX.Element {
   const setRangeIn = useEditor((s) => s.setRangeIn)
   const setRangeOut = useEditor((s) => s.setRangeOut)
   const clearRange = useEditor((s) => s.clearRange)
+  const toolMode = useEditor((s) => s.toolMode)
+  const setToolMode = useEditor((s) => s.setToolMode)
   const seq = activeSequence(project)
 
   const [pxPerSec, setPxPerSec] = useState(50)
@@ -86,13 +88,29 @@ export function Timeline(): JSX.Element {
   // ----- clip drag (move / trim) -----
   function onClipPointerDown(e: React.PointerEvent, clip: Clip, trackId: string): void {
     e.stopPropagation()
+
+    // Cut mode: single click splits the clip at the click position
+    if (toolMode === 'cut') {
+      const at = timeAtClientX(e.clientX)
+      void runCommand('split_clip', { clipId: clip.id, at })
+      return
+    }
+
     select(clip.id)
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const offsetX = e.clientX - rect.left
     const width = rect.width
-    let mode: DragMode = 'move'
-    if (offsetX <= EDGE_PX) mode = 'trim-left'
-    else if (offsetX >= width - EDGE_PX) mode = 'trim-right'
+
+    let mode: DragMode
+    if (toolMode === 'trim') {
+      // Trim mode: left half of clip = trim-left edge, right half = trim-right edge
+      mode = offsetX < width / 2 ? 'trim-left' : 'trim-right'
+    } else {
+      // Select mode: small edge zones trigger trim, center triggers move
+      if (offsetX <= EDGE_PX) mode = 'trim-left'
+      else if (offsetX >= width - EDGE_PX) mode = 'trim-right'
+      else mode = 'move'
+    }
 
     setDrag({
       clipId: clip.id,
@@ -207,6 +225,9 @@ export function Timeline(): JSX.Element {
         }}
       >
         <strong style={{ fontSize: theme.font.size.sm }}>Timeline</strong>
+        <ToolBtn label="V Select" mode="select" current={toolMode} onSelect={setToolMode} />
+        <ToolBtn label="T Trim" mode="trim" current={toolMode} onSelect={setToolMode} />
+        <ToolBtn label="C Cut" mode="cut" current={toolMode} onSelect={setToolMode} />
         <button
           disabled={!seq}
           onClick={() => runCommand('add_title', { text: 'Title', start: playhead, duration: 3 })}
@@ -420,7 +441,7 @@ export function Timeline(): JSX.Element {
                         fontSize: theme.font.size.sm,
                         whiteSpace: 'nowrap',
                         color: '#fff',
-                        cursor: 'grab',
+                        cursor: toolMode === 'cut' ? 'crosshair' : toolMode === 'trim' ? 'ew-resize' : 'grab',
                         userSelect: 'none',
                         boxShadow: selected ? `0 0 0 1px ${theme.color.accent}` : 'none'
                       }}
@@ -489,6 +510,36 @@ export function Timeline(): JSX.Element {
         </div>
       )}
     </div>
+  )
+}
+
+function ToolBtn({
+  label,
+  mode,
+  current,
+  onSelect
+}: {
+  label: string
+  mode: ToolMode
+  current: ToolMode
+  onSelect: (m: ToolMode) => void
+}): JSX.Element {
+  const active = mode === current
+  return (
+    <button
+      onClick={() => onSelect(mode)}
+      style={{
+        fontWeight: active ? 700 : 400,
+        background: active ? theme.color.accentDim : 'transparent',
+        borderColor: active ? theme.color.accent : theme.color.border,
+        color: active ? '#fff' : theme.color.textDim,
+        fontSize: theme.font.size.sm,
+        padding: '2px 8px'
+      }}
+      title={`Tool: ${mode} (${label[0]})`}
+    >
+      {label}
+    </button>
   )
 }
 
