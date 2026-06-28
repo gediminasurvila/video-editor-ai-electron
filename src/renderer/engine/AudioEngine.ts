@@ -38,6 +38,7 @@ export class AudioEngine {
     const t0 = this.ctx.currentTime + 0.05
 
     for (const track of sequence.tracks) {
+      if (track.muted) continue
       for (const clip of track.clips) {
         if (isTitle(clip) || clip.volume <= 0) continue
         const media = mediaById.get(clip.mediaId)

@@ -118,6 +118,9 @@ export const commandSchemas = {
     clipId: z.string(),
     time: z.number().min(0).describe('Exact time of the keyframe to delete')
   }),
+  detach_audio: z.object({
+    clipId: z.string().describe('The video or audio clip to detach from its linked pair')
+  }),
   get_timeline_state: z.object({}),
   export: z.object({
     outPath: z.string().describe('Absolute path for the rendered output file'),
@@ -148,6 +151,7 @@ export const commandDescriptions: Record<CommandName, string> = {
   set_keyframe:
     'Add or update an animation keyframe on a clip. Only the properties you supply are stored; missing ones fall back to the clip\'s static values. Use time=0 for the clip start.',
   delete_keyframe: 'Remove a keyframe at the given time from a clip.',
+  detach_audio: 'Break the link between a video clip and its paired audio clip, making them fully independent.',
   get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
   export: 'Render the active sequence to a video file.'
 }

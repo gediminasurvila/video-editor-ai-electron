@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor } from '../../state/store'
 import { useThumbnails } from '../../state/thumbnails'
 import { importViaDialog, addMediaToTimeline } from '../../actions/quickActions'
+import { ContextMenu, type ContextMenuState } from '../Timeline/ContextMenu'
 
 function fmtDuration(s: number): string {
   const m = Math.floor(s / 60)
@@ -14,16 +15,48 @@ export function MediaPanel(): JSX.Element {
   const project = useEditor((s) => s.project)
   const strips = useThumbnails((s) => s.strips)
   const ensure = useThumbnails((s) => s.ensure)
+  const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
+  const closeCtx = useCallback(() => setCtxMenu(null), [])
 
   useEffect(() => {
     for (const m of project.mediaPool) ensure(m)
   }, [project.mediaPool, ensure])
 
+  function openMediaCtx(e: React.MouseEvent, mediaId: string): void {
+    e.preventDefault()
+    e.stopPropagation()
+    setCtxMenu({
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        {
+          label: 'Add to Timeline',
+          onClick: () => void addMediaToTimeline(mediaId)
+        },
+        { separator: true },
+        {
+          label: 'Remove from Project',
+          danger: true,
+          onClick: () =>
+            useEditor.getState().commit((p) => {
+              p.mediaPool = p.mediaPool.filter((m) => m.id !== mediaId)
+              // Also remove any clips referencing this media
+              for (const seq of p.sequences) {
+                for (const track of seq.tracks) {
+                  track.clips = track.clips.filter((c) => c.mediaId !== mediaId)
+                }
+              }
+            })
+        }
+      ]
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Header title="Media" action={<button onClick={importViaDialog}>+ Import</button>} />
       <div style={{ flex: 1, overflowY: 'auto', padding: theme.space.sm }}>
-        {project.mediaPool.length === 0 && (
+        {project.mediaPool.length === 0 ? (
           <div
             onClick={importViaDialog}
             style={{
@@ -42,57 +75,68 @@ export function MediaPanel(): JSX.Element {
             <br />
             or click to import.
           </div>
-        )}
-        {project.mediaPool.map((m) => (
-          <div
-            key={m.id}
-            draggable
-            onDragStart={(e) => {
-              e.dataTransfer.setData('application/x-media-id', m.id)
-              e.dataTransfer.effectAllowed = 'copy'
-            }}
-            onDoubleClick={() => addMediaToTimeline(m.id)}
-            title="Double-click or drag onto the timeline"
-            style={{
-              padding: theme.space.sm,
-              marginBottom: theme.space.xs,
-              background: theme.color.panelAlt,
-              borderRadius: theme.radius.sm,
-              cursor: 'grab',
-              display: 'flex',
-              gap: theme.space.sm,
-              alignItems: 'center'
-            }}
-          >
+        ) : (
+          project.mediaPool.map((m) => (
             <div
+              key={m.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('application/x-media-id', m.id)
+                e.dataTransfer.effectAllowed = 'copy'
+              }}
+              onDoubleClick={() => void addMediaToTimeline(m.id)}
+              onContextMenu={(e) => openMediaCtx(e, m.id)}
+              title="Double-click or drag to timeline · Right-click for options"
               style={{
-                width: 64,
-                height: 36,
-                flexShrink: 0,
+                padding: theme.space.sm,
+                marginBottom: theme.space.xs,
+                background: theme.color.panelAlt,
                 borderRadius: theme.radius.sm,
-                background: strips[m.id]?.[0]
-                  ? `#000 center/cover no-repeat url(${strips[m.id][0]})`
-                  : theme.color.track,
+                cursor: 'grab',
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 16
+                gap: theme.space.sm,
+                alignItems: 'center'
               }}
             >
-              {!strips[m.id]?.[0] && (m.width > 0 ? '🎞️' : '🔊')}
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {m.name}
+              <div
+                style={{
+                  width: 64,
+                  height: 36,
+                  flexShrink: 0,
+                  borderRadius: theme.radius.sm,
+                  background: strips[m.id]?.[0]
+                    ? `#000 center/cover no-repeat url(${strips[m.id][0]})`
+                    : theme.color.track,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 16
+                }}
+              >
+                {!strips[m.id]?.[0] && (m.width > 0 ? '🎞️' : '🔊')}
               </div>
-              <div style={{ fontSize: theme.font.size.sm, color: theme.color.textDim }}>
-                {m.width > 0 ? `${m.width}×${m.height} · ` : ''}
-                {fmtDuration(m.duration)}
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontSize: theme.font.size.md
+                  }}
+                >
+                  {m.name}
+                </div>
+                <div style={{ fontSize: theme.font.size.sm, color: theme.color.textDim, marginTop: 2 }}>
+                  {m.width > 0 ? `${m.width}×${m.height}  ` : ''}
+                  {m.hasAudio ? '🔊 ' : ''}
+                  {fmtDuration(m.duration)}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
+      {ctxMenu && <ContextMenu menu={ctxMenu} onClose={closeCtx} />}
     </div>
   )
 }

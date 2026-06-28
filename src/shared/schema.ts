@@ -64,6 +64,8 @@ export const ClipSchema = z.object({
   kind: z.enum(['media', 'title']).default('media'),
   mediaId: z.string().default(''),
   title: TitleSchema.optional(),
+  /** ID of the paired clip on the other track (e.g. audio clip linked to a video clip). */
+  linkedClipId: z.string().optional(),
   /** Position on the timeline, in seconds. */
   start: z.number().min(0),
   /** In/out points within the source media (or 0..duration for titles), in seconds. */

@@ -1,5 +1,7 @@
 import { create } from 'zustand'
-import { type Project } from '@shared/schema'
+import { ProjectSchema, type Project } from '@shared/schema'
+
+const AUTO_SAVE_KEY = 'video-ai:autosave'
 
 function emptyProject(): Project {
   return {
@@ -10,6 +12,20 @@ function emptyProject(): Project {
     sequences: [],
     activeSequenceId: null
   }
+}
+
+function persistProject(project: Project): void {
+  try {
+    localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(project))
+  } catch {}
+}
+
+function loadSavedProject(): Project {
+  try {
+    const raw = localStorage.getItem(AUTO_SAVE_KEY)
+    if (raw) return ProjectSchema.parse(JSON.parse(raw))
+  } catch {}
+  return emptyProject()
 }
 
 export type ToolMode = 'select' | 'trim' | 'cut'
@@ -48,7 +64,7 @@ interface EditorState {
 const HISTORY_LIMIT = 100
 
 export const useEditor = create<EditorState>((set) => ({
-  project: emptyProject(),
+  project: loadSavedProject(),
   selectedClipId: null,
   playhead: 0,
   playing: false,
@@ -59,8 +75,9 @@ export const useEditor = create<EditorState>((set) => ({
   rangeOut: null,
   toolMode: 'select',
 
-  setProject: (project, filePath = null) =>
-    set({
+  setProject: (project, filePath = null) => {
+    persistProject(project)
+    return set({
       project,
       filePath,
       past: [],
@@ -68,13 +85,15 @@ export const useEditor = create<EditorState>((set) => ({
       selectedClipId: null,
       playhead: 0,
       playing: false
-    }),
+    })
+  },
 
   commit: (mutator) =>
     set((state) => {
       const next = structuredClone(state.project)
       mutator(next)
       const past = [...state.past, state.project].slice(-HISTORY_LIMIT)
+      persistProject(next)
       return { project: next, past, future: [] }
     }),
 
