@@ -106,7 +106,8 @@ const handlers: Handlers = {
         effects: [],
         volume: 1,
         fadeIn: 0,
-        fadeOut: 0
+        fadeOut: 0,
+        keyframes: []
       })
     })
     return { clipId: id }
@@ -124,13 +125,21 @@ const handlers: Handlers = {
           throw new Error('Split point is outside the clip')
         }
         const cutSource = clip.inPoint + localOffset
+        // Split keyframes: left half keeps keyframes before the cut; right half
+        // gets keyframes at/after the cut, re-offset relative to the new start.
+        const leftKfs = clip.keyframes.filter((k) => k.time < localOffset)
+        const rightKfs = clip.keyframes
+          .filter((k) => k.time >= localOffset)
+          .map((k) => ({ ...k, time: k.time - localOffset }))
         track.clips.push({
           ...structuredClone(clip),
           id: newId,
           start: at,
-          inPoint: cutSource
+          inPoint: cutSource,
+          keyframes: rightKfs
         })
         clip.outPoint = cutSource
+        clip.keyframes = leftKfs
         return
       }
       throw new Error(`Clip ${clipId} not found`)
@@ -257,7 +266,8 @@ const handlers: Handlers = {
         effects: [],
         volume: 1,
         fadeIn: 0,
-        fadeOut: 0
+        fadeOut: 0,
+        keyframes: []
       })
     })
     return { clipId: id }
@@ -363,6 +373,32 @@ const handlers: Handlers = {
           }
         }
       }
+    })
+    return { ok: true }
+  },
+
+  set_keyframe: ({ clipId, time, ...props }) => {
+    useEditor.getState().commit((p) => {
+      const clip = findClipIn(p, clipId)
+      if (!clip) throw new Error(`Clip ${clipId} not found`)
+      const existing = clip.keyframes.find((k) => k.time === time)
+      if (existing) {
+        Object.assign(existing, props)
+      } else {
+        clip.keyframes.push({ time, ...props })
+        clip.keyframes.sort((a, b) => a.time - b.time)
+      }
+    })
+    return { ok: true }
+  },
+
+  delete_keyframe: ({ clipId, time }) => {
+    useEditor.getState().commit((p) => {
+      const clip = findClipIn(p, clipId)
+      if (!clip) throw new Error(`Clip ${clipId} not found`)
+      const idx = clip.keyframes.findIndex((k) => k.time === time)
+      if (idx < 0) throw new Error(`No keyframe at time ${time} on clip ${clipId}`)
+      clip.keyframes.splice(idx, 1)
     })
     return { ok: true }
   },

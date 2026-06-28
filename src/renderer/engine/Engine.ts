@@ -1,6 +1,7 @@
 import {
   clipDuration,
   isTitle,
+  resolveTransform,
   type Clip,
   type MediaItem,
   type Project,
@@ -74,13 +75,15 @@ export class Engine {
       for (const clip of active) {
         const alpha = this.alphaFor(clip, time)
 
+        const transform = resolveTransform(clip, time)
+
         if (isTitle(clip) && clip.title) {
           const canvas = this.titles.get(clip.id, clip.title, sequence.width, sequence.height)
           layers.push({
             frame: canvas,
             frameWidth: sequence.width,
             frameHeight: sequence.height,
-            transform: clip.transform,
+            transform,
             alpha
           })
           continue
@@ -99,7 +102,7 @@ export class Engine {
           frame,
           frameWidth: decoded.width || item.width,
           frameHeight: decoded.height || item.height,
-          transform: clip.transform,
+          transform,
           alpha
         })
       }

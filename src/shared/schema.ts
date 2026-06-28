@@ -42,6 +42,22 @@ export const TransitionSchema = z.object({
 })
 export type Transition = z.infer<typeof TransitionSchema>
 
+/**
+ * A single keyframe for animatable clip properties. `time` is seconds from the
+ * clip's start on the timeline. Only the properties you want to animate need to
+ * be set; the others fall back to the clip's static values.
+ */
+export const KeyframeSchema = z.object({
+  time: z.number().min(0).describe('Seconds from clip start on the timeline'),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  scale: z.number().positive().optional(),
+  rotation: z.number().optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  volume: z.number().min(0).max(4).optional()
+})
+export type Keyframe = z.infer<typeof KeyframeSchema>
+
 export const ClipSchema = z.object({
   id: z.string(),
   /** 'media' clips reference the media pool; 'title' clips render text. */
@@ -60,9 +76,52 @@ export const ClipSchema = z.object({
   /** Fade in/out durations in seconds (apply to video opacity and audio gain). */
   fadeIn: z.number().min(0).default(0),
   fadeOut: z.number().min(0).default(0),
-  transition: TransitionSchema.optional()
+  transition: TransitionSchema.optional(),
+  /** Animation keyframes. Linearly interpolated; fallback to static transform/volume when empty. */
+  keyframes: z.array(KeyframeSchema).default([])
 })
 export type Clip = z.infer<typeof ClipSchema>
+
+/** Linearly interpolate a numeric property between the two nearest keyframes. */
+function lerpProp(
+  keyframes: Keyframe[],
+  time: number,
+  prop: keyof Omit<Keyframe, 'time'>,
+  fallback: number
+): number {
+  const kfs = keyframes.filter((k) => prop in k).sort((a, b) => a.time - b.time)
+  if (kfs.length === 0) return fallback
+  const before = [...kfs].reverse().find((k) => k.time <= time)
+  const after = kfs.find((k) => k.time > time)
+  if (!before) return after![prop] as number
+  if (!after) return before[prop] as number
+  const t = (time - before.time) / (after.time - before.time)
+  return (before[prop] as number) * (1 - t) + (after[prop] as number) * t
+}
+
+/**
+ * Resolve the effective Transform for a clip at a given absolute timeline time
+ * (in seconds), applying keyframe animation on top of the clip's static values.
+ */
+export function resolveTransform(clip: Clip, time: number): Transform {
+  const kfs = clip.keyframes
+  if (kfs.length === 0) return clip.transform
+  const local = time - clip.start
+  return {
+    x: lerpProp(kfs, local, 'x', clip.transform.x),
+    y: lerpProp(kfs, local, 'y', clip.transform.y),
+    scale: lerpProp(kfs, local, 'scale', clip.transform.scale),
+    rotation: lerpProp(kfs, local, 'rotation', clip.transform.rotation),
+    opacity: lerpProp(kfs, local, 'opacity', clip.transform.opacity)
+  }
+}
+
+/** Resolve effective volume for a clip at a given time. */
+export function resolveVolume(clip: Clip, time: number): number {
+  const kfs = clip.keyframes.filter((k) => 'volume' in k)
+  if (kfs.length === 0) return clip.volume
+  return lerpProp(kfs, time - clip.start, 'volume', clip.volume)
+}
 
 export const TrackSchema = z.object({
   id: z.string(),

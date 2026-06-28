@@ -2,10 +2,11 @@ import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { runCommand } from '../../commands'
 import { Header } from '../MediaPanel/MediaPanel'
-import { isTitle } from '@shared/schema'
+import { isTitle, resolveTransform, type Keyframe } from '@shared/schema'
 
 export function Inspector(): JSX.Element {
   const selectedClipId = useEditor((s) => s.selectedClipId)
+  const playhead = useEditor((s) => s.playhead)
   const project = useEditor((s) => s.project)
   const seq = activeSequence(project)
 
@@ -108,6 +109,35 @@ export function Inspector(): JSX.Element {
               )}
             </Section>
 
+            <Section title="Keyframes">
+              <button
+                onClick={() => {
+                  const local = Math.max(0, playhead - clip.start)
+                  const t = resolveTransform(clip, playhead)
+                  void runCommand('set_keyframe', {
+                    clipId: clip.id,
+                    time: local,
+                    x: t.x,
+                    y: t.y,
+                    scale: t.scale,
+                    rotation: t.rotation,
+                    opacity: t.opacity
+                  })
+                }}
+                style={{ marginBottom: theme.space.sm, width: '100%' }}
+                title="Capture current transform as a keyframe at the playhead"
+              >
+                + Add keyframe at playhead
+              </button>
+              {clip.keyframes.length === 0 ? (
+                <p style={{ color: theme.color.textDim, fontSize: theme.font.size.sm }}>
+                  No keyframes. Add one to start animating.
+                </p>
+              ) : (
+                <KeyframeList clipId={clip.id} keyframes={clip.keyframes} />
+              )}
+            </Section>
+
             <div style={{ display: 'flex', gap: theme.space.sm, marginTop: theme.space.sm }}>
               <button onClick={() => void runCommand('delete_clip', { clipId: clip.id })}>
                 Delete clip
@@ -197,6 +227,55 @@ function NumField({
         style={{ width: 90 }}
       />
     </Row>
+  )
+}
+
+function KeyframeList({
+  clipId,
+  keyframes
+}: {
+  clipId: string
+  keyframes: Keyframe[]
+}): JSX.Element {
+  const sorted = [...keyframes].sort((a, b) => a.time - b.time)
+  return (
+    <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+      {sorted.map((kf) => {
+        const props = Object.entries(kf)
+          .filter(([k]) => k !== 'time')
+          .map(([k, v]) => `${k}: ${typeof v === 'number' ? v.toFixed(2) : v}`)
+          .join(', ')
+        return (
+          <div
+            key={kf.time}
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: theme.space.xs,
+              fontSize: theme.font.size.sm,
+              background: theme.color.panelAlt,
+              borderRadius: theme.radius.sm,
+              padding: `2px ${theme.space.xs}px`
+            }}
+          >
+            <span style={{ color: theme.color.accent, minWidth: 40 }}>
+              {kf.time.toFixed(2)}s
+            </span>
+            <span style={{ flex: 1, color: theme.color.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: `0 ${theme.space.xs}px` }}>
+              {props}
+            </span>
+            <button
+              onClick={() => void runCommand('delete_keyframe', { clipId, time: kf.time })}
+              style={{ fontSize: 10, padding: '0 4px' }}
+              title="Delete this keyframe"
+            >
+              ×
+            </button>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 

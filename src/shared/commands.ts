@@ -104,6 +104,20 @@ export const commandSchemas = {
       .default(true)
       .describe('Shift later clips left after removing the range (default true)')
   }),
+  set_keyframe: z.object({
+    clipId: z.string(),
+    time: z.number().min(0).describe('Seconds from clip start on the timeline'),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    scale: z.number().positive().optional(),
+    rotation: z.number().optional(),
+    opacity: z.number().min(0).max(1).optional(),
+    volume: z.number().min(0).max(4).optional()
+  }),
+  delete_keyframe: z.object({
+    clipId: z.string(),
+    time: z.number().min(0).describe('Exact time of the keyframe to delete')
+  }),
   get_timeline_state: z.object({}),
   export: z.object({
     outPath: z.string().describe('Absolute path for the rendered output file'),
@@ -131,6 +145,9 @@ export const commandDescriptions: Record<CommandName, string> = {
     'Set or remove a cross-dissolve transition into a clip from the previous one (overlaps them).',
   delete_range:
     'Delete every clip (or portion of a clip) between inPoint and outPoint seconds. Pass ripple:true (default) to close the resulting gap.',
+  set_keyframe:
+    'Add or update an animation keyframe on a clip. Only the properties you supply are stored; missing ones fall back to the clip\'s static values. Use time=0 for the clip start.',
+  delete_keyframe: 'Remove a keyframe at the given time from a clip.',
   get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
   export: 'Render the active sequence to a video file.'
 }
