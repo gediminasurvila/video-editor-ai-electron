@@ -153,6 +153,24 @@ export const commandSchemas = {
   detach_audio: z.object({
     clipId: z.string().describe('The video or audio clip to detach from its linked pair')
   }),
+  undo: z.object({}),
+  redo: z.object({}),
+  add_captions: z.object({
+    mediaId: z.string().describe('The media item whose transcript to use for caption timing'),
+    trackId: z
+      .string()
+      .optional()
+      .describe('Video track to place captions on; defaults to the first video track'),
+    maxWords: z
+      .number()
+      .int()
+      .min(1)
+      .max(10)
+      .default(3)
+      .describe('Maximum words per caption clip (default 3)'),
+    fontSize: z.number().positive().default(48).describe('Caption font size (default 48)'),
+    color: z.string().default('#ffffff').describe('Caption text color (default white)')
+  }),
   get_transcript: z.object({
     mediaId: z.string().describe('ID of the media item to get the transcript for'),
     language: z
@@ -213,6 +231,9 @@ export const commandDescriptions: Record<CommandName, string> = {
   split_clips: 'Split multiple clips in one operation. Each entry in splits names a clip and the timeline position (seconds) where it should be cut.',
   set_project_settings: 'Update the active sequence resolution/frame-rate or the project name.',
   detach_audio: 'Break the link between a video clip and its paired audio clip, making them fully independent.',
+  undo: 'Undo the last edit operation.',
+  redo: 'Redo the previously undone operation.',
+  add_captions: 'Auto-place subtitle clips on the timeline timed to transcript words. Groups words into short phrases (maxWords per clip), places each as a title clip aligned to the source clip. Requires the media to be transcribed first (get_transcript).',
   get_transcript: 'Return the word-level transcript for a media item. Each word has a zero-based index, text, and start/end time relative to the source file. Transcribe the file first if needed.',
   remove_words: 'Cut a set of words (by index from get_transcript) out of the timeline using ripple-delete. Contiguous word runs are merged into one gap-close operation. Use this to remove filler words, silences, or bad takes without computing frame offsets manually.',
   inspect_media: 'Return metadata for a media pool item: resolution, fps, duration, has-audio, file path.',

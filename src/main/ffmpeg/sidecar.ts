@@ -55,16 +55,23 @@ export async function probeMedia(filePath: string): Promise<ProbeResult> {
   const data = JSON.parse(stdout) as FfprobeOutput
   const video = data.streams.find((s) => s.codec_type === 'video')
   const audio = data.streams.find((s) => s.codec_type === 'audio')
-  const duration = Number(data.format.duration ?? video?.duration ?? audio?.duration ?? 0)
+  const rawDuration = Number(data.format.duration ?? video?.duration ?? audio?.duration ?? 0)
+
+  // Still images (png/jpg/webp/gif) probe as video streams with N/A duration.
+  // Give them a 5-second default so they can be placed on the timeline.
+  const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'tif'])
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  const isImage = IMAGE_EXTS.has(ext)
+  const duration = (Number.isFinite(rawDuration) && rawDuration > 0) ? rawDuration : (isImage ? 5 : 0)
 
   return {
     media: {
       filePath,
-      duration: Number.isFinite(duration) ? duration : 0,
+      duration,
       width: video?.width ?? 0,
       height: video?.height ?? 0,
       fps: parseFps(video?.avg_frame_rate),
-      hasAudio: Boolean(audio),
+      hasAudio: Boolean(audio) && !isImage,
       codec: video?.codec_name ?? audio?.codec_name
     }
   }
