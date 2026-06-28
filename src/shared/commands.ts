@@ -96,6 +96,14 @@ export const commandSchemas = {
     type: z.enum(['dissolve', 'none']).default('dissolve'),
     duration: z.number().min(0).default(1).describe('Cross-dissolve seconds with the previous clip')
   }),
+  delete_range: z.object({
+    inPoint: z.number().min(0).describe('Range start in seconds'),
+    outPoint: z.number().min(0).describe('Range end in seconds'),
+    ripple: z
+      .boolean()
+      .default(true)
+      .describe('Shift later clips left after removing the range (default true)')
+  }),
   get_timeline_state: z.object({}),
   export: z.object({
     outPath: z.string().describe('Absolute path for the rendered output file'),
@@ -121,6 +129,8 @@ export const commandDescriptions: Record<CommandName, string> = {
   set_audio: 'Set a clip\'s volume and audio/video fade-in and fade-out durations.',
   set_transition:
     'Set or remove a cross-dissolve transition into a clip from the previous one (overlaps them).',
+  delete_range:
+    'Delete every clip (or portion of a clip) between inPoint and outPoint seconds. Pass ripple:true (default) to close the resulting gap.',
   get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
   export: 'Render the active sequence to a video file.'
 }
