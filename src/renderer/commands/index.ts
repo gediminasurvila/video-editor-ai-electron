@@ -138,14 +138,26 @@ const handlers: Handlers = {
     return { newClipId: newId }
   },
 
-  trim_clip: ({ clipId, inPoint, outPoint }) => {
+  trim_clip: ({ clipId, inPoint, outPoint, ripple }) => {
     useEditor.getState().commit((p) => {
       const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
       for (const track of seq?.tracks ?? []) {
         const clip = track.clips.find((c) => c.id === clipId)
         if (!clip) continue
+        const oldDuration = clipDuration(clip)
         if (inPoint !== undefined) clip.inPoint = inPoint
         if (outPoint !== undefined) clip.outPoint = outPoint
+        if (ripple) {
+          const delta = clipDuration(clip) - oldDuration
+          const boundary = clip.start + clipDuration(clip)
+          for (const t of seq!.tracks) {
+            for (const c of t.clips) {
+              if (c.id !== clipId && c.start >= boundary - delta) {
+                c.start = Math.max(0, c.start + delta)
+              }
+            }
+          }
+        }
         return
       }
       throw new Error(`Clip ${clipId} not found`)
@@ -192,13 +204,27 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
-  delete_clip: ({ clipId }) => {
+  delete_clip: ({ clipId, ripple }) => {
     useEditor.getState().commit((p) => {
       const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
       for (const track of seq?.tracks ?? []) {
         const idx = track.clips.findIndex((c) => c.id === clipId)
         if (idx >= 0) {
+          const clip = track.clips[idx]
+          const gapStart = clip.start
+          const gapSize = clipDuration(clip)
           track.clips.splice(idx, 1)
+          if (ripple && gapSize > 0) {
+            for (const t of seq!.tracks) {
+              for (const c of t.clips) {
+                if (c.start >= gapStart + gapSize) {
+                  c.start -= gapSize
+                } else if (c.start > gapStart) {
+                  c.start = gapStart
+                }
+              }
+            }
+          }
           return
         }
       }

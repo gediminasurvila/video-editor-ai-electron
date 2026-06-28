@@ -108,12 +108,17 @@ export function Inspector(): JSX.Element {
               )}
             </Section>
 
-            <button
-              onClick={() => runCommand('delete_clip', { clipId: clip.id })}
-              style={{ marginTop: theme.space.sm }}
-            >
-              🗑 Delete clip
-            </button>
+            <div style={{ display: 'flex', gap: theme.space.sm, marginTop: theme.space.sm }}>
+              <button onClick={() => runCommand('delete_clip', { clipId: clip.id })}>
+                Delete clip
+              </button>
+              <button
+                onClick={() => runCommand('delete_clip', { clipId: clip.id, ripple: true })}
+                title="Delete and shift all later clips left to close the gap (Shift+Delete)"
+              >
+                Ripple delete
+              </button>
+            </div>
           </>
         )}
       </div>
