@@ -52,6 +52,25 @@ export function useShortcuts(): void {
             void runCommand('delete_clip', { clipId: s.selectedClipId })
           }
           break
+        case 'v':
+        case 'V':
+          e.preventDefault()
+          s.setToolMode('select')
+          break
+        case 't':
+        case 'T':
+          if (!mod) {
+            e.preventDefault()
+            s.setToolMode('trim')
+          }
+          break
+        case 'c':
+        case 'C':
+          if (!mod) {
+            e.preventDefault()
+            s.setToolMode('cut')
+          }
+          break
         case 's':
         case 'S':
         case 'b':

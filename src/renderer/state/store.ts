@@ -12,6 +12,8 @@ function emptyProject(): Project {
   }
 }
 
+export type ToolMode = 'select' | 'trim' | 'cut'
+
 interface EditorState {
   project: Project
   selectedClipId: string | null
@@ -22,6 +24,8 @@ interface EditorState {
   filePath: string | null
   past: Project[]
   future: Project[]
+  /** Active editing tool (V = select, T = trim, C = cut/razor). */
+  toolMode: ToolMode
 
   setProject: (project: Project, filePath?: string | null) => void
   /** Apply a mutation as an undoable transaction. */
@@ -32,6 +36,7 @@ interface EditorState {
   togglePlay: () => void
   undo: () => void
   redo: () => void
+  setToolMode: (mode: ToolMode) => void
 }
 
 const HISTORY_LIMIT = 100
@@ -44,6 +49,7 @@ export const useEditor = create<EditorState>((set) => ({
   filePath: null,
   past: [],
   future: [],
+  toolMode: 'select',
 
   setProject: (project, filePath = null) =>
     set({
@@ -89,7 +95,9 @@ export const useEditor = create<EditorState>((set) => ({
         past: [...state.past, state.project].slice(-HISTORY_LIMIT),
         future: state.future.slice(1)
       }
-    })
+    }),
+
+  setToolMode: (mode) => set({ toolMode: mode })
 }))
 
 export function activeSequence(project: Project) {
