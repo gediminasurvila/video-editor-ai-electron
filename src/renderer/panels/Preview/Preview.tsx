@@ -1,16 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
-import { sequenceDuration } from '@shared/schema'
+import { clipDuration, sequenceDuration } from '@shared/schema'
 import { importViaDialog } from '../../actions/quickActions'
 import { Engine } from '../../engine/Engine'
 import { AudioEngine } from '../../engine/AudioEngine'
 
-/**
- * Preview surface. Decodes media with WebCodecs and composites the active frame
- * with the WebGL engine; a Web Audio engine plays clip audio in sync. The master
- * playback clock advances the playhead and the engine re-renders on change.
- */
 export function Preview(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const engineRef = useRef<Engine | null>(null)
@@ -22,10 +17,11 @@ export function Preview(): JSX.Element {
   const setPlayhead = useEditor((s) => s.setPlayhead)
   const playing = useEditor((s) => s.playing)
   const setPlaying = useEditor((s) => s.setPlaying)
+  const select = useEditor((s) => s.select)
   const seq = activeSequence(project)
   const duration = seq ? sequenceDuration(seq) : 0
 
-  // Create the engines once the canvas exists.
+  // Create engines once the canvas exists.
   useEffect(() => {
     if (!canvasRef.current) return
     try {
@@ -42,25 +38,21 @@ export function Preview(): JSX.Element {
     }
   }, [])
 
-  // Decode audio for imported media so playback starts cleanly.
   useEffect(() => {
     for (const m of project.mediaPool) audioRef.current?.prefetch(m)
   }, [project.mediaPool])
 
-  // Drive audio playback from the play/pause state.
   useEffect(() => {
     if (playing && seq) void audioRef.current?.play(seq, project.mediaPool, playhead)
     else audioRef.current?.stop()
-    // Re-sync only when play toggles (scrubbing mid-play is rare in a simple editor).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing])
 
-  // Render the current frame whenever time, project, or sequence changes.
   useEffect(() => {
     if (seq) engineRef.current?.render(project, seq, playhead)
   }, [project, seq, playhead])
 
-  // Master playback clock.
+  // Master playback clock — resets to 0 when sequence ends.
   useEffect(() => {
     if (!playing) return
     let raf = 0
@@ -70,7 +62,7 @@ export function Preview(): JSX.Element {
       last = now
       const next = useEditor.getState().playhead + dt
       if (next >= duration) {
-        setPlayhead(duration)
+        setPlayhead(0)
         setPlaying(false)
         return
       }
@@ -79,7 +71,22 @@ export function Preview(): JSX.Element {
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [playing, duration, setPlayhead])
+  }, [playing, duration, setPlayhead, setPlaying])
+
+  // Double-click canvas → select the topmost video clip at the playhead.
+  function selectClipAtPlayhead(): void {
+    if (!seq) return
+    for (let i = seq.tracks.length - 1; i >= 0; i--) {
+      const track = seq.tracks[i]
+      if (track.type !== 'video') continue
+      for (const clip of track.clips) {
+        if (playhead >= clip.start && playhead < clip.start + clipDuration(clip)) {
+          select(clip.id)
+          return
+        }
+      }
+    }
+  }
 
   return (
     <div
@@ -104,12 +111,15 @@ export function Preview(): JSX.Element {
         {seq ? (
           <canvas
             ref={canvasRef}
+            onDoubleClick={selectClipAtPlayhead}
+            title="Double-click to select clip at playhead"
             style={{
               maxWidth: '100%',
               maxHeight: '100%',
               aspectRatio: `${seq.width} / ${seq.height}`,
               background: '#000',
-              border: `1px solid ${theme.color.border}`
+              border: `1px solid ${theme.color.border}`,
+              cursor: 'default'
             }}
           />
         ) : (
@@ -134,18 +144,30 @@ export function Preview(): JSX.Element {
           alignItems: 'center',
           gap: theme.space.md,
           padding: `0 ${theme.space.md}px`,
-          borderTop: `1px solid ${theme.color.border}`
+          borderTop: `1px solid ${theme.color.border}`,
+          flexShrink: 0
         }}
       >
-        <button onClick={() => setPlayhead(0)} title="Go to start (Home)">
-          ⏮
-        </button>
-        <button onClick={() => setPlaying(!playing)} title="Play / pause (Space)" disabled={!seq}>
+        <button onClick={() => setPlayhead(0)} title="Go to start (Home)">⏮</button>
+        <button
+          onClick={() => setPlaying(!playing)}
+          title="Play / pause (Space)"
+          disabled={!seq}
+          style={{ minWidth: 70 }}
+        >
           {playing ? '⏸ Pause' : '▶ Play'}
         </button>
         <span style={{ fontFamily: theme.font.mono, fontSize: theme.font.size.sm }}>
           {fmtTime(playhead)} / {fmtTime(duration)}
         </span>
+        {seq && (
+          <span
+            style={{ fontSize: theme.font.size.sm, color: theme.color.textDim, marginLeft: 'auto' }}
+            title={`${seq.width}×${seq.height} @ ${seq.fps}fps`}
+          >
+            {seq.width}×{seq.height}
+          </span>
+        )}
       </div>
     </div>
   )

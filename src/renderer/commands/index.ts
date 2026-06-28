@@ -435,6 +435,53 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
+  split_clips: ({ splits }) => {
+    const newIds: string[] = []
+    useEditor.getState().commit((p) => {
+      const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
+      if (!seq) throw new Error('No active sequence')
+      // Sort splits by time ascending so earlier cuts don't shift later clip IDs
+      const sorted = [...splits].sort((a, b) => a.at - b.at)
+      for (const { clipId, at } of sorted) {
+        const newId = crypto.randomUUID()
+        for (const track of seq.tracks) {
+          const clip = track.clips.find((c) => c.id === clipId)
+          if (!clip) continue
+          const localOffset = at - clip.start
+          if (localOffset <= 0 || localOffset >= clipDuration(clip)) continue
+          const cutSource = clip.inPoint + localOffset
+          const leftKfs = clip.keyframes.filter((k) => k.time < localOffset)
+          const rightKfs = clip.keyframes
+            .filter((k) => k.time >= localOffset)
+            .map((k) => ({ ...k, time: k.time - localOffset }))
+          if (clip.linkedClipId) {
+            const linked = findLinkedClip(seq, clip.linkedClipId)
+            if (linked) delete linked.linkedClipId
+            delete clip.linkedClipId
+          }
+          track.clips.push({ ...structuredClone(clip), id: newId, start: at, inPoint: cutSource, keyframes: rightKfs })
+          clip.outPoint = cutSource
+          clip.keyframes = leftKfs
+          newIds.push(newId)
+          break
+        }
+      }
+    })
+    return { newClipIds: newIds }
+  },
+
+  set_project_settings: ({ name, width, height, fps }) => {
+    useEditor.getState().commit((p) => {
+      if (name !== undefined) p.name = name
+      const seq = p.sequences.find((s) => s.id === p.activeSequenceId)
+      if (!seq) throw new Error('No active sequence')
+      if (width !== undefined) seq.width = width
+      if (height !== undefined) seq.height = height
+      if (fps !== undefined) seq.fps = fps
+    })
+    return { ok: true }
+  },
+
   detach_audio: ({ clipId }) => {
     useEditor.getState().commit((p) => {
       const seq = p.sequences.find((s) => s.id === p.activeSequenceId)

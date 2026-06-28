@@ -31,6 +31,13 @@ interface Drag {
   ripple: boolean
 }
 
+interface TrackDrag {
+  trackId: string
+  origIndex: number
+  targetIndex: number
+  startY: number
+}
+
 export function Timeline(): JSX.Element {
   const project = useEditor((s) => s.project)
   const playhead = useEditor((s) => s.playhead)
@@ -48,6 +55,7 @@ export function Timeline(): JSX.Element {
 
   const [pxPerSec, setPxPerSec] = useState(50)
   const [drag, setDrag] = useState<Drag | null>(null)
+  const [trackDrag, setTrackDrag] = useState<TrackDrag | null>(null)
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
   const laneRef = useRef<HTMLDivElement>(null)
   const strips = useThumbnails((s) => s.strips)
@@ -220,6 +228,44 @@ export function Timeline(): JSX.Element {
       window.removeEventListener('pointerup', onUp)
     }
   }, [drag, pxPerSec])
+
+  // ── Track reorder drag ────────────────────────────────────────────────────
+  function onTrackGripDown(e: React.MouseEvent, trackId: string, origIndex: number): void {
+    e.preventDefault()
+    e.stopPropagation()
+    setTrackDrag({ trackId, origIndex, targetIndex: origIndex, startY: e.clientY })
+  }
+
+  useEffect(() => {
+    if (!trackDrag || !seq) return
+    const onMove = (e: MouseEvent): void => {
+      const dy = e.clientY - trackDrag.startY
+      const delta = Math.round(dy / TRACK_HEIGHT)
+      const target = Math.max(0, Math.min(seq.tracks.length - 1, trackDrag.origIndex + delta))
+      setTrackDrag((d) => d ? { ...d, targetIndex: target } : d)
+    }
+    const onUp = (): void => {
+      setTrackDrag((d) => {
+        if (d && d.targetIndex !== d.origIndex) {
+          useEditor.getState().commit((p) => {
+            const s = p.sequences.find((sq) => sq.id === p.activeSequenceId)
+            if (!s) return
+            const tracks = [...s.tracks]
+            const [moved] = tracks.splice(d.origIndex, 1)
+            tracks.splice(d.targetIndex, 0, moved)
+            s.tracks = tracks
+          })
+        }
+        return null
+      })
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [trackDrag, seq])
 
   // ── Drop media from bin ───────────────────────────────────────────────────
   function onLaneDrop(e: React.DragEvent, track: Track): void {
@@ -534,19 +580,38 @@ export function Timeline(): JSX.Element {
           </div>
 
           {/* Tracks */}
-          {seq.tracks.map((track) => {
+          {seq.tracks.map((track, idx) => {
             const isVideoTrack = track.type === 'video'
             const trackColor = isVideoTrack ? '#3a4a8c' : '#2a6a4a'
             return (
-              <div key={track.id} style={{ display: 'flex', height: TRACK_HEIGHT }}>
-                {/* Track header */}
+              <div key={track.id} style={{ display: 'flex', height: TRACK_HEIGHT, position: 'relative' }}>
+                {/* Track insert indicator */}
+              {trackDrag && trackDrag.targetIndex === idx && trackDrag.origIndex !== idx && (
+                <div
+                  style={{
+                    height: 2,
+                    background: theme.color.accent,
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: trackDrag.targetIndex < trackDrag.origIndex ? 0 : undefined,
+                    bottom: trackDrag.targetIndex > trackDrag.origIndex ? 0 : undefined,
+                    zIndex: 5,
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
+
+              {/* Track header */}
                 <div
                   onContextMenu={(e) => openTrackCtx(e, track)}
                   style={{
                     width: LABEL_WIDTH,
                     borderRight: `1px solid ${theme.color.border}`,
                     borderBottom: `1px solid ${theme.color.border}`,
-                    background: theme.color.panel,
+                    background: trackDrag?.trackId === track.id
+                      ? theme.color.panelAlt
+                      : theme.color.panel,
                     position: 'sticky',
                     left: 0,
                     zIndex: 1,
@@ -554,9 +619,29 @@ export function Timeline(): JSX.Element {
                     alignItems: 'center',
                     paddingLeft: 0,
                     gap: 0,
-                    overflow: 'hidden'
+                    overflow: 'hidden',
+                    opacity: trackDrag?.trackId === track.id ? 0.6 : 1
                   }}
                 >
+                  {/* Drag grip */}
+                  <div
+                    onMouseDown={(e) => onTrackGripDown(e, track.id, idx)}
+                    style={{
+                      width: 12,
+                      alignSelf: 'stretch',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'grab',
+                      color: theme.color.border,
+                      fontSize: 10,
+                      flexShrink: 0,
+                      userSelect: 'none'
+                    }}
+                    title="Drag to reorder track"
+                  >
+                    ⠿
+                  </div>
                   {/* Colored track type strip */}
                   <div
                     style={{

@@ -118,6 +118,18 @@ export const commandSchemas = {
     clipId: z.string(),
     time: z.number().min(0).describe('Exact time of the keyframe to delete')
   }),
+  split_clips: z.object({
+    splits: z
+      .array(z.object({ clipId: z.string(), at: z.number().min(0) }))
+      .min(1)
+      .describe('Batch of splits: each entry cuts clipId at the given timeline position in seconds')
+  }),
+  set_project_settings: z.object({
+    name: z.string().optional().describe('Project name'),
+    width: z.number().int().positive().optional().describe('Sequence width in pixels'),
+    height: z.number().int().positive().optional().describe('Sequence height in pixels'),
+    fps: z.number().positive().optional().describe('Sequence frame rate')
+  }),
   detach_audio: z.object({
     clipId: z.string().describe('The video or audio clip to detach from its linked pair')
   }),
@@ -151,6 +163,8 @@ export const commandDescriptions: Record<CommandName, string> = {
   set_keyframe:
     'Add or update an animation keyframe on a clip. Only the properties you supply are stored; missing ones fall back to the clip\'s static values. Use time=0 for the clip start.',
   delete_keyframe: 'Remove a keyframe at the given time from a clip.',
+  split_clips: 'Split multiple clips in one operation. Each entry in splits names a clip and the timeline position (seconds) where it should be cut.',
+  set_project_settings: 'Update the active sequence resolution/frame-rate or the project name.',
   detach_audio: 'Break the link between a video clip and its paired audio clip, making them fully independent.',
   get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
   export: 'Render the active sequence to a video file.'
