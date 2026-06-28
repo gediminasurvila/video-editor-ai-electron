@@ -65,7 +65,10 @@ function registerIpc(): void {
   ipcMain.handle(IpcChannels.openMediaDialog, async () => {
     const r = await dialog.showOpenDialog(mainWindow!, {
       filters: [
-        { name: 'Media', extensions: ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'mp3', 'wav', 'aac'] }
+        {
+          name: 'Media',
+          extensions: ['mp4', 'mov', 'm4v', 'webm', 'mkv', 'mp3', 'wav', 'aac', 'flac', 'm4a', 'png', 'jpg', 'jpeg', 'webp', 'gif']
+        }
       ],
       properties: ['openFile', 'multiSelections']
     })

@@ -558,6 +558,92 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
+  undo: () => { useEditor.getState().undo(); return { ok: true } },
+  redo: () => { useEditor.getState().redo(); return { ok: true } },
+
+  add_captions: async ({ mediaId, trackId, maxWords, fontSize, color }) => {
+    const { project } = useEditor.getState()
+    const media = project.mediaPool.find((m) => m.id === mediaId)
+    if (!media) throw new Error(`Media ${mediaId} not found`)
+
+    // Get or fetch transcript
+    const { transcripts, setTranscript } = useTranscripts.getState()
+    let words = transcripts[mediaId]
+    if (!words) {
+      const { apiKey } = useSettings.getState()
+      if (!apiKey) throw new Error('No API key. Run get_transcript first or set an OpenAI key.')
+      const result = await window.api.transcribeMedia(media.filePath, apiKey)
+      setTranscript(mediaId, result)
+      words = result
+    }
+    if (words.length === 0) throw new Error('Transcript is empty — nothing to caption.')
+
+    // Find the clip on the timeline that uses this media
+    const seq = project.sequences.find((s) => s.id === project.activeSequenceId)
+    if (!seq) throw new Error('No active sequence')
+    let sourceClip: import('@shared/schema').Clip | undefined
+    for (const track of seq.tracks) {
+      const c = track.clips.find((cl) => cl.mediaId === mediaId && cl.kind === 'media')
+      if (c) { sourceClip = c; break }
+    }
+    if (!sourceClip) throw new Error('Media is not on the timeline. Add it first.')
+    const clip = sourceClip
+
+    // Group words into phrases of ≤ maxWords
+    const phrases: { text: string; start: number; end: number }[] = []
+    let group: typeof words = []
+    for (const w of words) {
+      group.push(w)
+      if (group.length >= maxWords) {
+        phrases.push({ text: group.map((x) => x.word).join(' '), start: group[0].start, end: group[group.length - 1].end })
+        group = []
+      }
+    }
+    if (group.length) phrases.push({ text: group.map((x) => x.word).join(' '), start: group[0].start, end: group[group.length - 1].end })
+
+    // Find or create a caption video track
+    let captionTrackId = trackId
+    if (!captionTrackId) {
+      const captionTrack = seq.tracks.find((t) => t.type === 'video' && t.name === 'Captions')
+      captionTrackId = captionTrack?.id
+    }
+    if (!captionTrackId) {
+      const res = await runCommand('add_track', { type: 'video', name: 'Captions' })
+      captionTrackId = (res as { trackId: string }).trackId
+    }
+
+    // Place caption title clips
+    let count = 0
+    useEditor.getState().commit((p) => {
+      const s = p.sequences.find((sq) => sq.id === p.activeSequenceId)
+      if (!s) return
+      const t = s.tracks.find((tr) => tr.id === captionTrackId)
+      if (!t) return
+      for (const phrase of phrases) {
+        const tlStart = clip.start + (phrase.start - clip.inPoint)
+        const tlEnd = clip.start + (phrase.end - clip.inPoint)
+        if (tlStart < 0 || tlEnd <= tlStart) continue
+        t.clips.push({
+          id: crypto.randomUUID(),
+          kind: 'title',
+          start: tlStart,
+          inPoint: 0,
+          outPoint: tlEnd - tlStart,
+          mediaId: '',
+          title: { text: phrase.text, fontSize, color, background: 'transparent', align: 'center' },
+          transform: { x: 0, y: 60, scale: 1, rotation: 0, opacity: 1 },
+          effects: [],
+          volume: 1,
+          fadeIn: 0,
+          fadeOut: 0,
+          keyframes: []
+        })
+        count++
+      }
+    })
+    return { captionsAdded: count, trackId: captionTrackId }
+  },
+
   get_transcript: async ({ mediaId, language: _language }) => {
     const { project } = useEditor.getState()
     const media = project.mediaPool.find((m) => m.id === mediaId)
