@@ -13,8 +13,15 @@ export const IpcChannels = {
   saveProject: 'project:save',
   exportDialog: 'export:dialog',
   exportSequence: 'export:run',
-  mcpStatus: 'mcp:status'
+  mcpStatus: 'mcp:status',
+  transcribeMedia: 'media:transcribe'
 } as const
+
+export interface TranscriptWord {
+  word: string
+  start: number
+  end: number
+}
 
 /** Channels pushed main → renderer (mainWindow.webContents.send). */
 export const IpcEvents = {
