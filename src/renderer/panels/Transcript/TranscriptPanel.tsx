@@ -4,7 +4,6 @@ import { useEditor, activeSequence } from '../../state/store'
 import { useTranscripts } from '../../state/transcripts'
 import { useSettings } from '../../state/settings'
 import { runCommand } from '../../commands'
-import type { Clip } from '@shared/schema'
 import type { TranscriptWord } from '@shared/ipc'
 
 /**
@@ -30,14 +29,15 @@ export function TranscriptPanel(): JSX.Element {
   const media = project.mediaPool.find((m) => m.id === mediaId)
   const words: TranscriptWord[] = mediaId ? (transcripts[mediaId] ?? []) : []
 
-  // Find a clip that uses this media, to map word times → timeline times.
-  function clipForMedia(mId: string): Clip | undefined {
+  // Memoize the clip lookup so it's computed once per render, not once per word.
+  const activeClip = (() => {
+    if (!mediaId) return undefined
     for (const track of seq?.tracks ?? []) {
-      const c = track.clips.find((cl) => cl.mediaId === mId && cl.kind === 'media')
+      const c = track.clips.find((cl) => cl.mediaId === mediaId && cl.kind === 'media')
       if (c) return c
     }
     return undefined
-  }
+  })()
 
   async function transcribe(): Promise<void> {
     if (!media) return
@@ -63,11 +63,9 @@ export function TranscriptPanel(): JSX.Element {
   }
 
   function wordTimelineTime(word: TranscriptWord): number | null {
-    if (!mediaId) return null
-    const clip = clipForMedia(mediaId)
-    if (!clip) return null
+    if (!activeClip) return null
     // word.start is relative to the source file; map to timeline time via clip.inPoint
-    return clip.start + (word.start - clip.inPoint)
+    return activeClip.start + (word.start - activeClip.inPoint)
   }
 
   function seekToWord(word: TranscriptWord): void {
@@ -76,15 +74,16 @@ export function TranscriptPanel(): JSX.Element {
   }
 
   function isWordAtPlayhead(word: TranscriptWord): boolean {
+    if (!activeClip) return false
     const t = wordTimelineTime(word)
     if (t === null) return false
-    const clip = clipForMedia(mediaId!)
-    if (!clip) return false
     const dur = word.end - word.start
     return playhead >= t && playhead < t + dur
   }
 
-  function onWordPointerDown(idx: number): void {
+  function onWordPointerDown(e: React.PointerEvent, idx: number): void {
+    // Capture the pointer so pointerup fires even if the cursor leaves the element.
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     setSelectAnchor(idx)
     setSelection([idx, idx])
     seekToWord(words[idx])
@@ -102,14 +101,12 @@ export function TranscriptPanel(): JSX.Element {
   }
 
   async function deleteSelection(): Promise<void> {
-    if (!selection || !mediaId) return
+    if (!selection || !activeClip) return
     const [lo, hi] = selection
     const startWord = words[lo]
     const endWord = words[hi]
-    const clip = clipForMedia(mediaId)
-    if (!clip) return
-    const inPoint = clip.start + (startWord.start - clip.inPoint)
-    const outPoint = clip.start + (endWord.end - clip.inPoint)
+    const inPoint = activeClip.start + (startWord.start - activeClip.inPoint)
+    const outPoint = activeClip.start + (endWord.end - activeClip.inPoint)
     await runCommand('delete_range', { inPoint: Math.max(0, inPoint), outPoint: Math.max(0, outPoint), ripple: true })
     setSelection(null)
   }
@@ -221,7 +218,7 @@ export function TranscriptPanel(): JSX.Element {
                 return (
                   <span
                     key={i}
-                    onPointerDown={() => onWordPointerDown(i)}
+                    onPointerDown={(e) => onWordPointerDown(e, i)}
                     onPointerEnter={() => onWordPointerEnter(i)}
                     style={{
                       display: 'inline-block',

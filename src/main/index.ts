@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { readFile, unlink } from 'node:fs/promises'
+import { readFile, unlink, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
 import { IpcChannels, IpcEvents, type RunCommandResponse, type TranscriptWord } from '@shared/ipc'
@@ -123,6 +123,14 @@ function registerIpc(): void {
       const wavPath = join(tmpdir(), `video-ai-transcript-${Date.now()}.wav`)
       try {
         await extractAudio(filePath, wavPath)
+        const { size } = await stat(wavPath)
+        const WHISPER_LIMIT = 25 * 1024 * 1024
+        if (size > WHISPER_LIMIT) {
+          throw new Error(
+            `Audio file is ${(size / 1024 / 1024).toFixed(1)} MB — Whisper API limit is 25 MB. ` +
+              'Try trimming the clip before transcribing.'
+          )
+        }
         const wavBytes = await readFile(wavPath)
         const formData = new FormData()
         formData.append('file', new File([wavBytes], 'audio.wav', { type: 'audio/wav' }))
