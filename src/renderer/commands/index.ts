@@ -1,6 +1,8 @@
 import { commandSchemas, type CommandName } from '@shared/commands'
 import { clipDuration, isTitle, type Clip, type Project, type Sequence, type Track } from '@shared/schema'
 import { useEditor, activeSequence } from '../state/store'
+import { useTranscripts } from '../state/transcripts'
+import { useSettings } from '../state/settings'
 import { TitleRenderer } from '../engine/TitleRenderer'
 
 /** Render every title clip in a sequence to a PNG data URL for export baking. */
@@ -556,7 +558,147 @@ const handlers: Handlers = {
     return { ok: true }
   },
 
-  get_timeline_state: () => useEditor.getState().project,
+  get_transcript: async ({ mediaId, language: _language }) => {
+    const { project } = useEditor.getState()
+    const media = project.mediaPool.find((m) => m.id === mediaId)
+    if (!media) throw new Error(`Media ${mediaId} not found`)
+    const { transcripts, setTranscript } = useTranscripts.getState()
+    let words = transcripts[mediaId]
+    if (!words) {
+      const { apiKey } = useSettings.getState()
+      if (!apiKey) throw new Error('No API key configured. Set an OpenAI API key in Settings.')
+      const result = await window.api.transcribeMedia(media.filePath, apiKey)
+      setTranscript(mediaId, result)
+      words = result
+    }
+    return {
+      mediaId,
+      wordCount: words.length,
+      words: words.map((w, i) => ({ index: i, word: w.word, start: w.start, end: w.end }))
+    }
+  },
+
+  remove_words: ({ mediaId, wordIndices, aggressiveness }) => {
+    const { project } = useEditor.getState()
+    const { transcripts } = useTranscripts.getState()
+    const words = transcripts[mediaId]
+    if (!words || words.length === 0) throw new Error('No transcript for this media. Run get_transcript first.')
+
+    const PAD = aggressiveness === 'tight' ? 0 : aggressiveness === 'balanced' ? 0.04 : 0.12
+
+    // Find the clip on the timeline that uses this mediaId
+    const seq = project.sequences.find((s) => s.id === project.activeSequenceId)
+    if (!seq) throw new Error('No active sequence')
+    let foundClip: import('@shared/schema').Clip | undefined
+    for (const track of seq.tracks) {
+      const c = track.clips.find((cl) => cl.mediaId === mediaId && cl.kind === 'media')
+      if (c) { foundClip = c; break }
+    }
+    if (!foundClip) throw new Error('Media is not on the timeline')
+    const clip = foundClip
+
+    // Sort indices and group into contiguous runs
+    const sorted = [...new Set(wordIndices)].sort((a, b) => a - b)
+    const runs: [number, number][] = []
+    for (const idx of sorted) {
+      if (idx < 0 || idx >= words.length) throw new Error(`Word index ${idx} out of range (0..${words.length - 1})`)
+      if (runs.length && idx === runs[runs.length - 1][1] + 1) {
+        runs[runs.length - 1][1] = idx
+      } else {
+        runs.push([idx, idx])
+      }
+    }
+
+    // Convert source-relative word times to timeline positions, apply padding
+    const ranges = runs.map(([lo, hi]) => {
+      const srcStart = Math.max(0, words[lo].start - PAD)
+      const srcEnd = words[hi].end + PAD
+      const tl = (src: number): number => clip.start + (src - clip.inPoint)
+      return { inPoint: Math.max(0, tl(srcStart)), outPoint: tl(srcEnd) }
+    })
+
+    // Delete ranges from latest to earliest so earlier cuts don't shift later positions
+    const revRanges = [...ranges].reverse()
+    useEditor.getState().commit((p) => {
+      const s = p.sequences.find((sq) => sq.id === p.activeSequenceId)
+      if (!s) return
+      for (const { inPoint, outPoint } of revRanges) {
+        const gapSize = outPoint - inPoint
+        for (const track of s.tracks) {
+          for (let i = track.clips.length - 1; i >= 0; i--) {
+            const c = track.clips[i]
+            const cEnd = c.start + clipDuration(c)
+            if (c.start >= inPoint && cEnd <= outPoint) {
+              track.clips.splice(i, 1)
+            } else if (c.start < outPoint && cEnd > outPoint) {
+              c.inPoint += outPoint - c.start
+              c.start = inPoint
+            } else if (c.start < inPoint && cEnd > inPoint) {
+              c.outPoint = c.inPoint + (inPoint - c.start)
+            }
+          }
+          for (const c of track.clips) {
+            if (c.start >= outPoint) c.start -= gapSize
+          }
+        }
+      }
+    })
+    return { deletedRanges: ranges.length, ranges }
+  },
+
+  inspect_media: ({ mediaId }) => {
+    const { project } = useEditor.getState()
+    const media = project.mediaPool.find((m) => m.id === mediaId)
+    if (!media) throw new Error(`Media ${mediaId} not found`)
+    return {
+      id: mediaId,
+      name: media.name,
+      filePath: media.filePath,
+      width: media.width,
+      height: media.height,
+      fps: media.fps,
+      duration: media.duration,
+      hasAudio: media.hasAudio
+    }
+  },
+
+  get_timeline_state: () => {
+    const project = useEditor.getState().project
+    // Return a compact version with 8-char IDs so agent context stays small
+    const short = (id: string): string => id.slice(0, 8)
+    return {
+      name: project.name,
+      activeSequenceId: short(project.activeSequenceId ?? ''),
+      mediaPool: project.mediaPool.map((m) => ({
+        id: short(m.id),
+        name: m.name,
+        duration: Math.round(m.duration * 100) / 100,
+        width: m.width,
+        height: m.height,
+        hasAudio: m.hasAudio
+      })),
+      sequences: project.sequences.map((seq) => ({
+        id: short(seq.id),
+        name: seq.name,
+        width: seq.width,
+        height: seq.height,
+        fps: seq.fps,
+        tracks: seq.tracks.map((track) => ({
+          id: short(track.id),
+          name: track.name,
+          type: track.type,
+          muted: track.muted,
+          clips: track.clips.map((clip) => ({
+            id: short(clip.id),
+            mediaId: clip.mediaId ? short(clip.mediaId) : undefined,
+            start: Math.round(clip.start * 100) / 100,
+            duration: Math.round(clipDuration(clip) * 100) / 100,
+            ...(clip.kind === 'title' && clip.title ? { text: clip.title.text } : {})
+          }))
+        }))
+      }))
+    }
+  },
 
   export: async ({ outPath }) => {
     const { project } = useEditor.getState()

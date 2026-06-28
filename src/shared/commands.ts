@@ -153,6 +153,32 @@ export const commandSchemas = {
   detach_audio: z.object({
     clipId: z.string().describe('The video or audio clip to detach from its linked pair')
   }),
+  get_transcript: z.object({
+    mediaId: z.string().describe('ID of the media item to get the transcript for'),
+    language: z
+      .string()
+      .optional()
+      .describe('BCP-47 language code for the transcription (e.g. "en", "fr", "de"). Omit to auto-detect.')
+  }),
+  remove_words: z.object({
+    mediaId: z.string().describe('The media item whose transcript contains the words to remove'),
+    wordIndices: z
+      .array(z.number().int().min(0))
+      .min(1)
+      .describe(
+        'Zero-based word indices from get_transcript to cut from the timeline. ' +
+          'Contiguous groups are merged into one ripple-delete range.'
+      ),
+    aggressiveness: z
+      .enum(['tight', 'balanced', 'loose'])
+      .default('balanced')
+      .describe(
+        'tight = exact word boundaries, balanced = 40ms padding, loose = 120ms padding to eat surrounding silence'
+      )
+  }),
+  inspect_media: z.object({
+    mediaId: z.string().describe('ID of a media item in the pool to probe')
+  }),
   get_timeline_state: z.object({}),
   export: z.object({
     outPath: z.string().describe('Absolute path for the rendered output file'),
@@ -187,7 +213,10 @@ export const commandDescriptions: Record<CommandName, string> = {
   split_clips: 'Split multiple clips in one operation. Each entry in splits names a clip and the timeline position (seconds) where it should be cut.',
   set_project_settings: 'Update the active sequence resolution/frame-rate or the project name.',
   detach_audio: 'Break the link between a video clip and its paired audio clip, making them fully independent.',
-  get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
+  get_transcript: 'Return the word-level transcript for a media item. Each word has a zero-based index, text, and start/end time relative to the source file. Transcribe the file first if needed.',
+  remove_words: 'Cut a set of words (by index from get_transcript) out of the timeline using ripple-delete. Contiguous word runs are merged into one gap-close operation. Use this to remove filler words, silences, or bad takes without computing frame offsets manually.',
+  inspect_media: 'Return metadata for a media pool item: resolution, fps, duration, has-audio, file path.',
+  get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips. IDs are shortened to 8 chars for readability.',
   export: 'Render the active sequence to a video file.'
 }
 
