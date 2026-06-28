@@ -88,6 +88,20 @@ export const commandSchemas = {
     type: z.enum(['dissolve', 'none']).default('dissolve'),
     duration: z.number().min(0).default(1).describe('Cross-dissolve seconds with the previous clip')
   }),
+  set_keyframe: z.object({
+    clipId: z.string(),
+    time: z.number().min(0).describe('Seconds from clip start on the timeline'),
+    x: z.number().optional(),
+    y: z.number().optional(),
+    scale: z.number().positive().optional(),
+    rotation: z.number().optional(),
+    opacity: z.number().min(0).max(1).optional(),
+    volume: z.number().min(0).max(4).optional()
+  }),
+  delete_keyframe: z.object({
+    clipId: z.string(),
+    time: z.number().min(0).describe('Exact time of the keyframe to delete')
+  }),
   get_timeline_state: z.object({}),
   export: z.object({
     outPath: z.string().describe('Absolute path for the rendered output file'),
@@ -113,6 +127,9 @@ export const commandDescriptions: Record<CommandName, string> = {
   set_audio: 'Set a clip\'s volume and audio/video fade-in and fade-out durations.',
   set_transition:
     'Set or remove a cross-dissolve transition into a clip from the previous one (overlaps them).',
+  set_keyframe:
+    'Add or update an animation keyframe on a clip. Only the properties you supply are stored; missing ones fall back to the clip\'s static values. Use time=0 for the clip start.',
+  delete_keyframe: 'Remove a keyframe at the given time from a clip.',
   get_timeline_state: 'Return the current project state: media pool, sequences, tracks, and clips.',
   export: 'Render the active sequence to a video file.'
 }

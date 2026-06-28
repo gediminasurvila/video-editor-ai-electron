@@ -106,7 +106,8 @@ const handlers: Handlers = {
         effects: [],
         volume: 1,
         fadeIn: 0,
-        fadeOut: 0
+        fadeOut: 0,
+        keyframes: []
       })
     })
     return { clipId: id }
@@ -231,7 +232,8 @@ const handlers: Handlers = {
         effects: [],
         volume: 1,
         fadeIn: 0,
-        fadeOut: 0
+        fadeOut: 0,
+        keyframes: []
       })
     })
     return { clipId: id }
@@ -283,6 +285,32 @@ const handlers: Handlers = {
         return
       }
       throw new Error(`Clip ${clipId} not found`)
+    })
+    return { ok: true }
+  },
+
+  set_keyframe: ({ clipId, time, ...props }) => {
+    useEditor.getState().commit((p) => {
+      const clip = findClipIn(p, clipId)
+      if (!clip) throw new Error(`Clip ${clipId} not found`)
+      const existing = clip.keyframes.find((k) => k.time === time)
+      if (existing) {
+        Object.assign(existing, props)
+      } else {
+        clip.keyframes.push({ time, ...props })
+        clip.keyframes.sort((a, b) => a.time - b.time)
+      }
+    })
+    return { ok: true }
+  },
+
+  delete_keyframe: ({ clipId, time }) => {
+    useEditor.getState().commit((p) => {
+      const clip = findClipIn(p, clipId)
+      if (!clip) throw new Error(`Clip ${clipId} not found`)
+      const idx = clip.keyframes.findIndex((k) => k.time === time)
+      if (idx < 0) throw new Error(`No keyframe at time ${time} on clip ${clipId}`)
+      clip.keyframes.splice(idx, 1)
     })
     return { ok: true }
   },
