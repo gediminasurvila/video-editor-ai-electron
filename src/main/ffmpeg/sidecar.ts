@@ -128,6 +128,23 @@ export async function generateThumbnails(
   return out
 }
 
+/** Extract audio from a media file as 16 kHz mono 16-bit PCM WAV (Whisper-optimal format). */
+export async function extractAudio(inputPath: string, outPath: string): Promise<void> {
+  await execFileAsync(binary('ffmpeg'), [
+    '-y',
+    '-i',
+    inputPath,
+    '-vn',
+    '-ar',
+    '16000',
+    '-ac',
+    '1',
+    '-c:a',
+    'pcm_s16le',
+    outPath
+  ])
+}
+
 export async function runFfmpeg(args: string[], onProgress?: (line: string) => void): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = execFile(binary('ffmpeg'), args)

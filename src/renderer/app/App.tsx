@@ -6,11 +6,12 @@ import { Preview } from '../panels/Preview/Preview'
 import { Inspector } from '../panels/Inspector/Inspector'
 import { Timeline } from '../panels/Timeline/Timeline'
 import { AgentChat } from '../panels/AgentChat/AgentChat'
+import { TranscriptPanel } from '../panels/Transcript/TranscriptPanel'
 import { SettingsModal } from '../panels/Settings/SettingsModal'
 import { useShortcuts } from '../hooks/useShortcuts'
 import { importFiles } from '../actions/quickActions'
 
-type RightTab = 'inspector' | 'agent'
+type RightTab = 'inspector' | 'agent' | 'transcript'
 
 export function App(): JSX.Element {
   const [rightTab, setRightTab] = useState<RightTab>('inspector')
@@ -58,13 +59,24 @@ export function App(): JSX.Element {
               onClick={() => setRightTab('inspector')}
             />
             <Tab
-              label="✨ AI assistant"
+              label="✨ AI"
               active={rightTab === 'agent'}
               onClick={() => setRightTab('agent')}
             />
+            <Tab
+              label="Transcript"
+              active={rightTab === 'transcript'}
+              onClick={() => setRightTab('transcript')}
+            />
           </div>
           <div style={{ flex: 1, minHeight: 0 }}>
-            {rightTab === 'inspector' ? <Inspector /> : <AgentChat />}
+            {rightTab === 'inspector' ? (
+              <Inspector />
+            ) : rightTab === 'agent' ? (
+              <AgentChat />
+            ) : (
+              <TranscriptPanel />
+            )}
           </div>
         </Panel>
       </div>

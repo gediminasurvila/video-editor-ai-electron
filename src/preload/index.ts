@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { IpcChannels, IpcEvents } from '@shared/ipc'
-import type { ProbeResult, RunCommandRequest, RunCommandResponse, McpStatus } from '@shared/ipc'
+import type { ProbeResult, RunCommandRequest, RunCommandResponse, McpStatus, TranscriptWord } from '@shared/ipc'
 import type { Project } from '@shared/schema'
 
 /**
@@ -50,6 +50,9 @@ const api = {
       ipcRenderer.send(IpcEvents.runCommand + ':response', res)
     })
   },
+
+  transcribeMedia: (filePath: string, apiKey: string): Promise<TranscriptWord[]> =>
+    ipcRenderer.invoke(IpcChannels.transcribeMedia, filePath, apiKey),
 
   onExportProgress: (cb: (line: string) => void): (() => void) => {
     const listener = (_e: unknown, line: string): void => cb(line)

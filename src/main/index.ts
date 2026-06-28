@@ -1,8 +1,9 @@
 import { join } from 'node:path'
-import { readFile } from 'node:fs/promises'
+import { readFile, unlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
-import { IpcChannels, IpcEvents, type RunCommandResponse } from '@shared/ipc'
-import { probeMedia, generateThumbnails } from './ffmpeg/sidecar'
+import { IpcChannels, IpcEvents, type RunCommandResponse, type TranscriptWord } from '@shared/ipc'
+import { probeMedia, generateThumbnails, extractAudio } from './ffmpeg/sidecar'
 import { loadProject, saveProject } from './project/io'
 import { exportSequence } from './export/render'
 import { CommandBridge } from './mcp/bridge'
@@ -115,6 +116,35 @@ function registerIpc(): void {
   )
 
   ipcMain.handle(IpcChannels.mcpStatus, () => mcp.status())
+
+  ipcMain.handle(
+    IpcChannels.transcribeMedia,
+    async (_e, filePath: string, apiKey: string): Promise<TranscriptWord[]> => {
+      const wavPath = join(tmpdir(), `video-ai-transcript-${Date.now()}.wav`)
+      try {
+        await extractAudio(filePath, wavPath)
+        const wavBytes = await readFile(wavPath)
+        const formData = new FormData()
+        formData.append('file', new File([wavBytes], 'audio.wav', { type: 'audio/wav' }))
+        formData.append('model', 'whisper-1')
+        formData.append('response_format', 'verbose_json')
+        formData.append('timestamp_granularities[]', 'word')
+        const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}` },
+          body: formData
+        })
+        if (!response.ok) {
+          const body = await response.text()
+          throw new Error(`Whisper API error ${response.status}: ${body}`)
+        }
+        const data = (await response.json()) as { words?: TranscriptWord[] }
+        return data.words ?? []
+      } finally {
+        await unlink(wavPath).catch(() => undefined)
+      }
+    }
+  )
 
   // Renderer replies to a command:run event forwarded from the MCP bridge.
   ipcMain.on(IpcEvents.runCommand + ':response', (_e, res: RunCommandResponse) =>
