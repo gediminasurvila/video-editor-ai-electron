@@ -7,6 +7,7 @@ import { addMediaToTimeline } from '../../actions/quickActions'
 import { snapTime } from '../../timeline/snap'
 import { clipDuration, isTitle, type Clip, type Track } from '@shared/schema'
 import { ContextMenu, type ContextMenuState, type MenuEntry } from './ContextMenu'
+import { IconFilm, IconMusic, IconVolume, IconVolumeX, IconScissors, IconTrash, IconAlertTriangle, IconLink } from '../../components/Icons'
 
 const TRACK_HEIGHT = 64
 const LABEL_WIDTH = 112
@@ -18,6 +19,7 @@ type DragMode = 'move' | 'trim-left' | 'trim-right'
 interface Drag {
   clipId: string
   trackId: string
+  targetTrackId: string
   mode: DragMode
   startX: number
   origStart: number
@@ -58,6 +60,8 @@ export function Timeline(): JSX.Element {
   const [trackDrag, setTrackDrag] = useState<TrackDrag | null>(null)
   const [ctxMenu, setCtxMenu] = useState<ContextMenuState | null>(null)
   const laneRef = useRef<HTMLDivElement>(null)
+  const seqRef = useRef(seq)
+  useEffect(() => { seqRef.current = seq }, [seq])
   const strips = useThumbnails((s) => s.strips)
   const ensureThumbs = useThumbnails((s) => s.ensure)
 
@@ -122,6 +126,7 @@ export function Timeline(): JSX.Element {
     setDrag({
       clipId: clip.id,
       trackId,
+      targetTrackId: trackId,
       mode,
       startX: e.clientX,
       origStart: clip.start,
@@ -150,7 +155,24 @@ export function Timeline(): JSX.Element {
           const snappedStart = snapTime(start, points, SNAP_PX / pxPerSec)
           const snappedEnd = snapTime(start + dur, points, SNAP_PX / pxPerSec)
           start = snappedStart !== start ? snappedStart : snappedEnd - dur
-          return { ...d, start: Math.max(0, start), moved: true }
+
+          // Compute which track the mouse is over for cross-track drag
+          let targetTrackId = d.targetTrackId
+          const lane = laneRef.current
+          const currentSeq = seqRef.current
+          if (lane && currentSeq) {
+            const laneRect = lane.getBoundingClientRect()
+            const relY = (e.clientY - laneRect.top) + lane.scrollTop - 22
+            const trackIdx = Math.max(0, Math.min(currentSeq.tracks.length - 1, Math.floor(relY / TRACK_HEIGHT)))
+            const hovered = currentSeq.tracks[trackIdx]
+            // Only allow moving to same track type
+            const srcTrack = currentSeq.tracks.find((t) => t.id === d.trackId)
+            if (hovered && srcTrack && hovered.type === srcTrack.type) {
+              targetTrackId = hovered.id
+            }
+          }
+
+          return { ...d, start: Math.max(0, start), moved: true, targetTrackId }
         }
         if (d.mode === 'trim-left') {
           let start = snapTime(d.origStart + deltaSec, points, SNAP_PX / pxPerSec)
@@ -175,46 +197,55 @@ export function Timeline(): JSX.Element {
           useEditor.getState().commit((p) => {
             const sequence = p.sequences.find((s) => s.id === p.activeSequenceId)
             for (const t of sequence?.tracks ?? []) {
-              const c = t.clips.find((x) => x.id === d.clipId)
-              if (c) {
-                const prevStart = c.start
-                const prevIn = c.inPoint
-                const prevOut = c.outPoint
-                c.start = d.start
-                c.inPoint = d.inPoint
-                c.outPoint = d.outPoint
+              const cIdx = t.clips.findIndex((x) => x.id === d.clipId)
+              if (cIdx === -1) continue
+              const c = t.clips[cIdx]
+              const prevStart = c.start
+              const prevIn = c.inPoint
+              const prevOut = c.outPoint
+              c.start = d.start
+              c.inPoint = d.inPoint
+              c.outPoint = d.outPoint
 
-                // Propagate to linked clip
-                if (c.linkedClipId) {
-                  for (const t2 of sequence!.tracks) {
-                    const linked = t2.clips.find((x) => x.id === c.linkedClipId)
-                    if (linked) {
-                      linked.start = Math.max(0, linked.start + (d.start - prevStart))
-                      linked.inPoint = Math.max(0, linked.inPoint + (d.inPoint - prevIn))
-                      linked.outPoint = linked.outPoint + (d.outPoint - prevOut)
-                      break
-                    }
+              // Move to different track if needed
+              if (d.targetTrackId !== d.trackId) {
+                const targetTrack = sequence!.tracks.find((t2) => t2.id === d.targetTrackId)
+                if (targetTrack) {
+                  t.clips.splice(cIdx, 1)
+                  targetTrack.clips.push(c)
+                }
+              }
+
+              // Propagate to linked clip
+              if (c.linkedClipId) {
+                for (const t2 of sequence!.tracks) {
+                  const linked = t2.clips.find((x) => x.id === c.linkedClipId)
+                  if (linked) {
+                    linked.start = Math.max(0, linked.start + (d.start - prevStart))
+                    linked.inPoint = Math.max(0, linked.inPoint + (d.inPoint - prevIn))
+                    linked.outPoint = linked.outPoint + (d.outPoint - prevOut)
+                    break
                   }
                 }
+              }
 
-                // Ripple: shift all other clips right of the trim point
-                if (d.ripple && d.mode !== 'move') {
-                  const oldDur = prevOut - prevIn
-                  const newDur = d.outPoint - d.inPoint
-                  const delta = newDur - oldDur
-                  if (delta !== 0) {
-                    const boundary = d.start + newDur
-                    for (const t2 of sequence!.tracks) {
-                      for (const c2 of t2.clips) {
-                        if (c2.id !== d.clipId && c2.id !== c.linkedClipId && c2.start >= boundary - delta) {
-                          c2.start = Math.max(0, c2.start + delta)
-                        }
+              // Ripple: shift all other clips right of the trim point
+              if (d.ripple && d.mode !== 'move') {
+                const oldDur = prevOut - prevIn
+                const newDur = d.outPoint - d.inPoint
+                const delta = newDur - oldDur
+                if (delta !== 0) {
+                  const boundary = d.start + newDur
+                  for (const t2 of sequence!.tracks) {
+                    for (const c2 of t2.clips) {
+                      if (c2.id !== d.clipId && c2.id !== c.linkedClipId && c2.start >= boundary - delta) {
+                        c2.start = Math.max(0, c2.start + delta)
                       }
                     }
                   }
                 }
-                return
               }
+              return
             }
           })
         }
@@ -439,21 +470,23 @@ export function Timeline(): JSX.Element {
           onClick={() => void runCommand('add_title', { text: 'Title', start: playhead, duration: 3 })}
           title="Add title clip at playhead"
         >
-          T Title
+          Title
         </TlBtn>
         <TlBtn
           disabled={!selectedClipId}
           onClick={() => selectedClipId && void runCommand('split_clip', { clipId: selectedClipId, at: playhead })}
           title="Split selected clip at playhead (S)"
+          icon={<IconScissors size={12} />}
         >
-          ✂ Split
+          Split
         </TlBtn>
         <TlBtn
           disabled={!selectedClipId}
           onClick={() => selectedClipId && void runCommand('delete_clip', { clipId: selectedClipId })}
           title="Delete selected clip (Delete)"
+          icon={<IconTrash size={12} />}
         >
-          ⌫ Delete
+          Delete
         </TlBtn>
         <div style={{ width: 1, background: theme.color.border, height: 16, margin: '0 4px' }} />
         <TlBtn onClick={() => setRangeIn(playhead)} title="Set in-point (I)">I</TlBtn>
@@ -493,7 +526,7 @@ export function Timeline(): JSX.Element {
             fontSize: theme.font.size.sm
           }}
         >
-          <div style={{ fontSize: 28, opacity: 0.4 }}>🎬</div>
+          <div style={{ opacity: 0.35, color: theme.color.textDim }}><IconFilm size={28} /></div>
           Import a video or drag files here to start editing.
           <div style={{ display: 'flex', gap: theme.space.sm }}>
             <TlBtn onClick={() => void runCommand('add_track', { type: 'video' })}>+ Video Track</TlBtn>
@@ -582,7 +615,13 @@ export function Timeline(): JSX.Element {
           </div>
 
           {/* Tracks */}
-          {seq.tracks.map((track, idx) => {
+          {(() => {
+            const isCrossTrack = drag?.mode === 'move' && !!drag.targetTrackId && drag.targetTrackId !== drag.trackId
+            const crossClip = isCrossTrack
+              ? seq.tracks.flatMap((t) => t.clips).find((c) => c.id === drag!.clipId) ?? null
+              : null
+            const crossMedia = crossClip ? mediaById.get(crossClip.mediaId) : undefined
+            return seq.tracks.map((track, idx) => {
             const isVideoTrack = track.type === 'video'
             const trackColor = isVideoTrack ? '#3a4a8c' : '#2a6a4a'
             return (
@@ -647,7 +686,9 @@ export function Timeline(): JSX.Element {
                       minWidth: 0
                     }}
                   >
-                    <span style={{ fontSize: 13 }}>{isVideoTrack ? '🎬' : '🔊'}</span>
+                    <span style={{ display: 'flex', color: track.muted ? theme.color.textDim : (isVideoTrack ? '#7a9cff' : '#7acfa0') }}>
+                      {isVideoTrack ? <IconFilm size={13} /> : <IconMusic size={13} />}
+                    </span>
                     <span
                       style={{
                         fontSize: theme.font.size.sm,
@@ -665,8 +706,12 @@ export function Timeline(): JSX.Element {
                       onClick={() => toggleMute(track)}
                       title={track.muted ? 'Unmute' : 'Mute'}
                       style={{
-                        fontSize: 11,
-                        padding: '1px 4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 22,
+                        height: 22,
+                        padding: 0,
                         background: track.muted ? theme.color.danger + '33' : 'transparent',
                         border: `1px solid ${track.muted ? theme.color.danger : theme.color.border}`,
                         color: track.muted ? theme.color.danger : theme.color.textDim,
@@ -675,7 +720,7 @@ export function Timeline(): JSX.Element {
                         flexShrink: 0
                       }}
                     >
-                      M
+                      {track.muted ? <IconVolumeX size={12} /> : <IconVolume size={12} />}
                     </button>
                   </div>
                 </div>
@@ -697,8 +742,32 @@ export function Timeline(): JSX.Element {
                     borderBottom: `1px solid ${theme.color.border}`
                   }}
                 >
+                  {/* Cross-track drag: highlight target track */}
+                  {isCrossTrack && drag!.targetTrackId === track.id && (
+                    <div style={{ position: 'absolute', inset: 0, border: `2px solid ${theme.color.accent}`, pointerEvents: 'none', zIndex: 3 }} />
+                  )}
                   {track.clips.map((clip) => {
                     const live = drag?.clipId === clip.id ? drag : null
+
+                    // Ghost in source track when dragging clip to a different track
+                    if (live && live.mode === 'move' && live.targetTrackId !== track.id) {
+                      return (
+                        <div
+                          key={clip.id}
+                          style={{
+                            position: 'absolute',
+                            left: clip.start * pxPerSec,
+                            width: Math.max(2, clipDuration(clip) * pxPerSec),
+                            top: 5,
+                            bottom: 5,
+                            border: `2px dashed ${theme.color.accent}66`,
+                            borderRadius: theme.radius.sm,
+                            pointerEvents: 'none',
+                          }}
+                        />
+                      )
+                    }
+
                     const start = live ? live.start : clip.start
                     const dur = live
                       ? live.outPoint - live.inPoint
@@ -790,13 +859,15 @@ export function Timeline(): JSX.Element {
                               position: 'absolute',
                               left: 2,
                               top: 2,
-                              fontSize: 9,
+                              fontSize: 8,
+                              letterSpacing: -0.5,
                               background: 'rgba(0,0,0,0.45)',
                               borderRadius: 3,
-                              padding: '0 3px'
+                              padding: '0 3px',
+                              color: '#fff'
                             }}
                           >
-                            ⤫
+                            diss
                           </div>
                         )}
                         {/* Offline indicator */}
@@ -811,11 +882,12 @@ export function Timeline(): JSX.Element {
                               fontSize: 11,
                               color: '#e06050',
                               fontWeight: 'bold',
-                              gap: 3,
+                              gap: 4,
                               pointerEvents: 'none'
                             }}
                           >
-                            ⚠ Media Offline
+                            <IconAlertTriangle size={12} />
+                            Media Offline
                           </div>
                         )}
                         {/* Linked indicator */}
@@ -825,11 +897,11 @@ export function Timeline(): JSX.Element {
                               position: 'absolute',
                               right: 4,
                               top: 3,
-                              fontSize: 9,
-                              opacity: 0.7
+                              opacity: 0.6,
+                              display: 'flex'
                             }}
                           >
-                            🔗
+                            <IconLink size={11} />
                           </div>
                         )}
                         {/* Ripple indicator while dragging */}
@@ -862,10 +934,37 @@ export function Timeline(): JSX.Element {
                       </div>
                     )
                   })}
+                  {/* Cross-track drag: preview in target track */}
+                  {isCrossTrack && crossClip && drag!.targetTrackId === track.id && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: drag!.start * pxPerSec,
+                        width: Math.max(2, (drag!.outPoint - drag!.inPoint) * pxPerSec),
+                        top: 5,
+                        bottom: 5,
+                        background: isVideoTrack ? theme.color.clip : theme.color.clipAudio,
+                        border: `2px solid ${theme.color.accent}`,
+                        borderRadius: theme.radius.sm,
+                        overflow: 'hidden',
+                        fontSize: theme.font.size.sm,
+                        whiteSpace: 'nowrap',
+                        color: '#fff',
+                        pointerEvents: 'none',
+                        opacity: 0.85,
+                        zIndex: 2,
+                      }}
+                    >
+                      <span style={{ position: 'relative', display: 'inline-block', padding: '3px 8px', textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}>
+                        {isTitle(crossClip) ? `T  ${crossClip.title?.text ?? ''}` : crossMedia?.name ?? 'clip'}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )
-          })}
+          })
+        })()}
 
           {/* Playhead */}
           <div
@@ -928,21 +1027,24 @@ function TlBtn({
   disabled,
   onClick,
   title,
-  style
+  style,
+  icon
 }: {
   children: React.ReactNode
   disabled?: boolean
   onClick?: () => void
   title?: string
   style?: React.CSSProperties
+  icon?: React.ReactNode
 }): JSX.Element {
   return (
     <button
       disabled={disabled}
       onClick={onClick}
       title={title}
-      style={{ fontSize: theme.font.size.sm, padding: '2px 7px', ...style }}
+      style={{ fontSize: theme.font.size.sm, padding: '2px 7px', display: 'flex', alignItems: 'center', gap: 3, ...style }}
     >
+      {icon}
       {children}
     </button>
   )

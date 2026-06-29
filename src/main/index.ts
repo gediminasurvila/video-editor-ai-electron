@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { readFile, readdir, unlink, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
+import { app, BrowserWindow, Menu, ipcMain, dialog, type WebContents } from 'electron'
 import { IpcChannels, IpcEvents, type RunCommandResponse, type TranscriptWord } from '@shared/ipc'
 import { probeMedia, generateThumbnails, extractAudio, transcodeForPreview } from './ffmpeg/sidecar'
 import { loadProject, saveProject } from './project/io'
@@ -191,8 +191,91 @@ function registerIpc(): void {
   )
 }
 
+function buildMenu(): void {
+  const send = (action: string): void => {
+    mainWindow?.webContents.send(IpcEvents.menuAction, action)
+  }
+
+  const isMac = process.platform === 'darwin'
+  const template: Electron.MenuItemConstructorOptions[] = [
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' as const },
+        { type: 'separator' as const },
+        { role: 'services' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { role: 'quit' as const }
+      ]
+    }] : []),
+    {
+      label: 'File',
+      submenu: [
+        { label: 'New Project', accelerator: 'CmdOrCtrl+Shift+N', click: () => send('newProject') },
+        { label: 'New Sequence…', click: () => send('newSequence') },
+        { type: 'separator' as const },
+        { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => send('open') },
+        { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => send('save') },
+        { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => send('saveAs') },
+        { type: 'separator' as const },
+        { label: 'Import Media…', accelerator: 'CmdOrCtrl+I', click: () => send('import') },
+        { label: 'Clear Media Pool', click: () => send('clearMedia') },
+        { type: 'separator' as const },
+        { label: 'Export Video…', accelerator: 'CmdOrCtrl+E', click: () => send('export') },
+        ...(!isMac ? [{ type: 'separator' as const }, { role: 'quit' as const }] : [])
+      ]
+    },
+    {
+      label: 'Edit',
+      submenu: [
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('undo') },
+        { label: 'Redo', accelerator: isMac ? 'Cmd+Shift+Z' : 'Ctrl+Y', click: () => send('redo') },
+        { type: 'separator' as const },
+        { role: 'cut' as const },
+        { role: 'copy' as const },
+        { role: 'paste' as const },
+        { role: 'selectAll' as const }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' as const },
+        { role: 'forceReload' as const },
+        { role: 'toggleDevTools' as const },
+        { type: 'separator' as const },
+        { role: 'resetZoom' as const },
+        { role: 'zoomIn' as const },
+        { role: 'zoomOut' as const },
+        { type: 'separator' as const },
+        { role: 'togglefullscreen' as const }
+      ]
+    },
+    ...(isMac ? [{
+      label: 'Window',
+      submenu: [
+        { role: 'minimize' as const },
+        { role: 'zoom' as const },
+        { type: 'separator' as const },
+        { role: 'front' as const }
+      ]
+    }] : [])
+  ]
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
 app.whenReady().then(async () => {
   registerIpc()
+  buildMenu()
+  // In dev mode on macOS the bundle icon isn't used — set dock icon explicitly.
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    app.dock?.setIcon(iconPath())
+  }
   createWindow()
   try {
     const status = await mcp.start()

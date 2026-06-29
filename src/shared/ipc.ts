@@ -29,7 +29,9 @@ export interface TranscriptWord {
 export const IpcEvents = {
   /** The MCP server received a tool call and wants the renderer to run a command. */
   runCommand: 'command:run',
-  mcpStatusChanged: 'mcp:statusChanged'
+  mcpStatusChanged: 'mcp:statusChanged',
+  /** Native menu item was clicked; payload is the action string. */
+  menuAction: 'menu:action'
 } as const
 
 export interface ProbeResult {

@@ -65,7 +65,7 @@ export class Engine {
     const mediaById = new Map(project.mediaPool.map((m) => [m.id, m]))
     const layers: Layer[] = []
 
-    for (const track of sequence.tracks) {
+    for (const track of [...sequence.tracks].reverse()) {
       if (track.type !== 'video') continue
       // Clips active at `time`, earliest first so a dissolve draws incoming on top.
       const active = track.clips

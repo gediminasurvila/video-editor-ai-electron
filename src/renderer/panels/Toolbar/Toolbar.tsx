@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { theme } from '../../app/theme'
-import { useEditor, activeSequence } from '../../state/store'
+import { useEditor, activeSequence, emptyProject } from '../../state/store'
 import { runCommand } from '../../commands'
 import { importViaDialog } from '../../actions/quickActions'
 import { sequenceDuration } from '@shared/schema'
+import { IconSettings, IconUndo, IconRedo, IconUpload } from '../../components/Icons'
 import type { McpStatus } from '@shared/ipc'
 
 const RATIO_PILLS = [
@@ -14,16 +15,41 @@ const RATIO_PILLS = [
 ] as const
 
 export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () => void; onNewSequence: () => void }): JSX.Element {
-  const { project, filePath, undo, redo, past, future, setProject } = useEditor()
+  const { project, filePath, undo, redo, past, future, setProject, commit } = useEditor()
   const [mcp, setMcp] = useState<McpStatus | null>(null)
   const [exporting, setExporting] = useState<string | null>(null)
 
   const seq = activeSequence(project)
   const hasContent = !!seq && sequenceDuration(seq) > 0
 
+  // Keep action refs current so the menu IPC listener never captures stale state
+  const actionsRef = useRef({ newProject, open, save, saveAs, clearMedia, exportVideo, onNewSequence, undo, redo })
+  useEffect(() => {
+    actionsRef.current = { newProject, open, save, saveAs, clearMedia, exportVideo, onNewSequence, undo, redo }
+  })
+
   useEffect(() => {
     window.api.mcpStatus().then(setMcp)
     return window.api.onMcpStatusChanged(setMcp)
+  }, [])
+
+  // Native menu → renderer bridge
+  useEffect(() => {
+    return window.api.onMenuAction((action) => {
+      const a = actionsRef.current
+      switch (action) {
+        case 'newProject': a.newProject(); break
+        case 'newSequence': a.onNewSequence(); break
+        case 'open': void a.open(); break
+        case 'save': void a.save(); break
+        case 'saveAs': void a.saveAs(); break
+        case 'import': importViaDialog(); break
+        case 'clearMedia': a.clearMedia(); break
+        case 'export': void a.exportVideo(); break
+        case 'undo': a.undo(); break
+        case 'redo': a.redo(); break
+      }
+    })
   }, [])
 
   async function open(): Promise<void> {
@@ -37,6 +63,26 @@ export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () 
     if (!path) return
     await window.api.saveProject(path, project)
     if (!filePath) setProject(project, path)
+  }
+
+  async function saveAs(): Promise<void> {
+    const path = await window.api.saveProjectDialog()
+    if (!path) return
+    await window.api.saveProject(path, project)
+    setProject(project, path)
+  }
+
+  function newProject(): void {
+    if (project.mediaPool.length > 0 || project.sequences.length > 0) {
+      if (!window.confirm('Start a new project? Unsaved changes will be lost.')) return
+    }
+    setProject(emptyProject())
+  }
+
+  function clearMedia(): void {
+    if (project.mediaPool.length === 0) return
+    if (!window.confirm(`Remove all ${project.mediaPool.length} item(s) from the media pool?`)) return
+    commit((p) => { p.mediaPool = [] })
   }
 
   async function exportVideo(): Promise<void> {
@@ -61,7 +107,7 @@ export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () 
   return (
     <div
       style={{
-        height: 48,
+        height: 44,
         display: 'flex',
         alignItems: 'center',
         gap: theme.space.sm,
@@ -70,13 +116,11 @@ export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () 
         borderBottom: `1px solid ${theme.color.border}`
       }}
     >
-      <strong style={{ marginRight: theme.space.sm }}>🎬 Video AI</strong>
-
-      <button onClick={importViaDialog} style={primaryBtn} title="Import media (⌘/Ctrl+I)">
+      <button onClick={importViaDialog} style={primaryBtn} title="Import media (⌘I)">
         + Import
       </button>
 
-      <button onClick={onNewSequence} title="Create a new sequence">
+      <button onClick={onNewSequence} title="New sequence">
         + Sequence
       </button>
 
@@ -107,19 +151,21 @@ export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () 
       )}
 
       <Sep />
-      <button onClick={open} title="Open project">
-        Open
+      <button
+        onClick={undo}
+        disabled={past.length === 0}
+        title="Undo (⌘Z)"
+        style={{ display: 'flex', alignItems: 'center', padding: '4px 7px' }}
+      >
+        <IconUndo size={14} />
       </button>
-      <button onClick={save} title="Save project (⌘/Ctrl+S)">
-        Save
-      </button>
-
-      <Sep />
-      <button onClick={undo} disabled={past.length === 0} title="Undo (⌘/Ctrl+Z)">
-        ↶
-      </button>
-      <button onClick={redo} disabled={future.length === 0} title="Redo (⌘/Ctrl+Shift+Z)">
-        ↷
+      <button
+        onClick={redo}
+        disabled={future.length === 0}
+        title="Redo (⌘⇧Z)"
+        style={{ display: 'flex', alignItems: 'center', padding: '4px 7px' }}
+      >
+        <IconRedo size={14} />
       </button>
 
       <div style={{ flex: 1 }} />
@@ -127,8 +173,14 @@ export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () 
       {exporting && (
         <span style={{ fontSize: theme.font.size.sm, color: theme.color.accent }}>{exporting}</span>
       )}
-      <button onClick={exportVideo} disabled={!hasContent || !!exporting} style={primaryBtn}>
-        ⬆ Export
+      <button
+        onClick={() => void exportVideo()}
+        disabled={!hasContent || !!exporting}
+        style={{ ...primaryBtn, display: 'flex', alignItems: 'center', gap: 5 }}
+        title="Export video (⌘E)"
+      >
+        <IconUpload size={13} />
+        Export
       </button>
 
       <Sep />
@@ -142,8 +194,12 @@ export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () 
           ● {mcp?.running ? 'on' : 'off'}
         </span>
       </button>
-      <button onClick={onOpenSettings} title="Settings">
-        ⚙
+      <button
+        onClick={onOpenSettings}
+        title="Settings"
+        style={{ display: 'flex', alignItems: 'center', padding: '4px 7px', color: theme.color.textDim }}
+      >
+        <IconSettings size={15} />
       </button>
     </div>
   )
@@ -157,5 +213,5 @@ const primaryBtn: React.CSSProperties = {
 }
 
 function Sep(): JSX.Element {
-  return <div style={{ width: 1, height: 22, background: theme.color.border, margin: '0 4px' }} />
+  return <div style={{ width: 1, height: 22, background: theme.color.border, margin: '0 2px' }} />
 }

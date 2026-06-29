@@ -3,7 +3,7 @@ import { ProjectSchema, type Project } from '@shared/schema'
 
 const AUTO_SAVE_KEY = 'video-ai:autosave'
 
-function emptyProject(): Project {
+export function emptyProject(): Project {
   return {
     version: 1,
     id: crypto.randomUUID(),

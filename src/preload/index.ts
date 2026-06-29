@@ -61,6 +61,12 @@ const api = {
     const listener = (_e: unknown, line: string): void => cb(line)
     ipcRenderer.on('export:progress', listener)
     return () => ipcRenderer.removeListener('export:progress', listener)
+  },
+
+  onMenuAction: (cb: (action: string) => void): (() => void) => {
+    const listener = (_e: unknown, action: string): void => cb(action)
+    ipcRenderer.on(IpcEvents.menuAction, listener)
+    return () => ipcRenderer.removeListener(IpcEvents.menuAction, listener)
   }
 }
 

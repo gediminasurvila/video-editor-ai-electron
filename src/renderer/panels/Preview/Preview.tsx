@@ -6,6 +6,7 @@ import { importViaDialog } from '../../actions/quickActions'
 import { runCommand } from '../../commands'
 import { Engine } from '../../engine/Engine'
 import { AudioEngine } from '../../engine/AudioEngine'
+import { IconVideo } from '../../components/Icons'
 
 export function Preview(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -162,7 +163,7 @@ export function Preview(): JSX.Element {
           </div>
         ) : (
           <div style={{ textAlign: 'center', color: theme.color.textDim }}>
-            <div style={{ fontSize: 40, marginBottom: theme.space.md }}>🎬</div>
+            <div style={{ marginBottom: theme.space.md, opacity: 0.4, color: theme.color.textDim, display: 'flex' }}><IconVideo size={40} /></div>
             <p style={{ margin: 0, fontSize: theme.font.size.lg, color: theme.color.text }}>
               Start your movie
             </p>

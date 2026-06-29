@@ -4,6 +4,7 @@ import { useEditor } from '../../state/store'
 import { useThumbnails } from '../../state/thumbnails'
 import { importViaDialog, importFolderViaDialog, addMediaToTimeline } from '../../actions/quickActions'
 import { ContextMenu, type ContextMenuState } from '../Timeline/ContextMenu'
+import { IconFolder, IconFilm, IconMusic, IconAlertTriangle, IconVolume } from '../../components/Icons'
 
 function fmtDuration(s: number): string {
   const m = Math.floor(s / 60)
@@ -110,7 +111,7 @@ export function MediaPanel(): JSX.Element {
               cursor: 'pointer'
             }}
           >
-            <div style={{ fontSize: 22, marginBottom: theme.space.sm }}>📁</div>
+            <div style={{ marginBottom: theme.space.sm, opacity: 0.5, color: theme.color.textDim, display: 'flex', justifyContent: 'center' }}><IconFolder size={22} /></div>
             Drop video or audio files here,
             <br />
             or click to import.
@@ -157,7 +158,11 @@ export function MediaPanel(): JSX.Element {
                     fontSize: 16
                   }}
                 >
-                  {offline ? '⚠️' : !strips[m.id]?.[0] ? (m.width > 0 ? '🎞️' : '🔊') : null}
+                  {offline
+                    ? <IconAlertTriangle size={16} />
+                    : !strips[m.id]?.[0]
+                      ? (m.width > 0 ? <IconFilm size={16} /> : <IconMusic size={16} />)
+                      : null}
                 </div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div
@@ -177,7 +182,7 @@ export function MediaPanel(): JSX.Element {
                   ) : (
                     <div style={{ fontSize: theme.font.size.sm, color: theme.color.textDim, marginTop: 2 }}>
                       {m.width > 0 ? `${m.width}×${m.height}  ` : ''}
-                      {m.hasAudio ? '🔊 ' : ''}
+                      {m.hasAudio ? <><IconVolume size={10} />{' '}</> : ''}
                       {fmtDuration(m.duration)}
                     </div>
                   )}
