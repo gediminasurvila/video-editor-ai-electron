@@ -2,7 +2,7 @@ import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { runCommand } from '../../commands'
 import { Header } from '../MediaPanel/MediaPanel'
-import { clipDuration, isTitle, resolveTransform, type Keyframe } from '@shared/schema'
+import { clipDuration, isTitle, resolveTransform, containFit, fillScale, type Keyframe } from '@shared/schema'
 
 const ASPECT_PRESETS = [
   { label: '16:9 — 1920×1080 (Full HD)', w: 1920, h: 1080 },
@@ -22,9 +22,76 @@ export function Inspector(): JSX.Element {
 
   const clip = seq?.tracks.flatMap((t) => t.clips).find((c) => c.id === selectedClipId) ?? null
 
-  function setTransform(key: 'x' | 'y' | 'scale' | 'rotation' | 'opacity', value: number): void {
-    if (clip) void runCommand('set_property', { clipId: clip.id, transform: { [key]: value } })
+  const localTime = clip ? Math.max(0, playhead - clip.start) : 0
+  const KF_EPS = 0.02
+
+  function hasPropKf(prop: keyof Omit<Keyframe, 'time'>): boolean {
+    return (clip?.keyframes ?? []).some((k) => Math.abs(k.time - localTime) < KF_EPS && prop in k)
   }
+
+  function addPropKf(prop: keyof Omit<Keyframe, 'time'>, value: number): void {
+    if (!clip) return
+    const t = Math.round(localTime * 1000) / 1000
+    void runCommand('set_keyframe', { clipId: clip.id, time: t, [prop]: value })
+  }
+
+  function setTransform(key: 'x' | 'y' | 'scale' | 'rotation' | 'opacity', value: number): void {
+    if (!clip) return
+    const kfAt = clip.keyframes.find((k) => Math.abs(k.time - localTime) < KF_EPS)
+    if (kfAt && key in kfAt) {
+      const t = Math.round(localTime * 1000) / 1000
+      void runCommand('set_keyframe', { clipId: clip.id, time: t, [key]: value })
+    } else {
+      void runCommand('set_property', { clipId: clip.id, transform: { [key]: value } })
+    }
+  }
+
+  function fitClip(): void {
+    if (!clip) return
+    void runCommand('set_property', { clipId: clip.id, transform: { x: 0, y: 0, scale: 1 } })
+  }
+
+  function fillClip(): void {
+    if (!clip || !seq) return
+    const media = project.mediaPool.find((m) => m.id === clip.mediaId)
+    if (!media || media.width === 0) return
+    const scale = fillScale(media.width, media.height, seq.width, seq.height)
+    void runCommand('set_property', { clipId: clip.id, transform: { x: 0, y: 0, scale } })
+  }
+
+  function applyKenBurns(type: 'zoom-in' | 'zoom-out' | 'pan-lr' | 'pan-rl'): void {
+    if (!clip || !seq) return
+    const media = project.mediaPool.find((m) => m.id === clip.mediaId)
+    if (!media || media.width === 0) return
+    const dur = clipDuration(clip)
+    const fs = fillScale(media.width, media.height, seq.width, seq.height)
+    const panFs = fs * 1.15
+    const { drawW, drawH } = containFit(media.width, media.height, seq.width, seq.height)
+    const panX = Math.max(0, (drawW * panFs - seq.width) / 2) * 0.7
+    const panY = Math.max(0, (drawH * panFs - seq.height) / 2) * 0.7
+    let kf0: Keyframe, kf1: Keyframe
+    if (type === 'zoom-in') {
+      kf0 = { time: 0, scale: fs, x: 0, y: 0, opacity: 1 }
+      kf1 = { time: dur, scale: fs * 1.25, x: 0, y: 0, opacity: 1 }
+    } else if (type === 'zoom-out') {
+      kf0 = { time: 0, scale: fs * 1.25, x: 0, y: 0, opacity: 1 }
+      kf1 = { time: dur, scale: fs, x: 0, y: 0, opacity: 1 }
+    } else if (type === 'pan-lr') {
+      kf0 = { time: 0, scale: panFs, x: -panX, y: 0, opacity: 1 }
+      kf1 = { time: dur, scale: panFs, x: panX, y: 0, opacity: 1 }
+    } else {
+      kf0 = { time: 0, scale: panFs, x: panX, y: 0, opacity: 1 }
+      kf1 = { time: dur, scale: panFs, x: -panX, y: 0, opacity: 1 }
+    }
+    useEditor.getState().commit((p) => {
+      const s = p.sequences.find((sq) => sq.id === p.activeSequenceId)
+      for (const t of s?.tracks ?? []) {
+        const c = t.clips.find((x) => x.id === clip!.id)
+        if (c) { c.keyframes = [kf0, kf1]; break }
+      }
+    })
+  }
+
   function setAudio(patch: { volume?: number; fadeIn?: number; fadeOut?: number }): void {
     if (clip) void runCommand('set_audio', { clipId: clip.id, ...patch })
   }
@@ -116,12 +183,43 @@ export function Inspector(): JSX.Element {
             )}
 
             <Section title="Transform">
-              <NumField label="Position X" value={clip.transform.x} onChange={(v) => setTransform('x', v)} />
-              <NumField label="Position Y" value={clip.transform.y} onChange={(v) => setTransform('y', v)} />
-              <NumField label="Scale" value={clip.transform.scale} step={0.05} onChange={(v) => setTransform('scale', v)} />
-              <NumField label="Rotation" value={clip.transform.rotation} onChange={(v) => setTransform('rotation', v)} />
-              <NumField label="Opacity" value={clip.transform.opacity} step={0.05} min={0} max={1} onChange={(v) => setTransform('opacity', v)} />
+              <KfNumField label="Position X" value={resolveTransform(clip, playhead).x} onChange={(v) => setTransform('x', v)} hasKf={hasPropKf('x')} onKf={() => addPropKf('x', resolveTransform(clip, playhead).x)} />
+              <KfNumField label="Position Y" value={resolveTransform(clip, playhead).y} onChange={(v) => setTransform('y', v)} hasKf={hasPropKf('y')} onKf={() => addPropKf('y', resolveTransform(clip, playhead).y)} />
+              <KfNumField label="Scale" value={resolveTransform(clip, playhead).scale} step={0.05} onChange={(v) => setTransform('scale', v)} hasKf={hasPropKf('scale')} onKf={() => addPropKf('scale', resolveTransform(clip, playhead).scale)} />
+              <KfNumField label="Rotation" value={resolveTransform(clip, playhead).rotation} onChange={(v) => setTransform('rotation', v)} hasKf={hasPropKf('rotation')} onKf={() => addPropKf('rotation', resolveTransform(clip, playhead).rotation)} />
+              <KfNumField label="Opacity" value={resolveTransform(clip, playhead).opacity} step={0.05} min={0} max={1} onChange={(v) => setTransform('opacity', v)} hasKf={hasPropKf('opacity')} onKf={() => addPropKf('opacity', resolveTransform(clip, playhead).opacity)} />
+              {clip.kind === 'media' && (
+                <div style={{ display: 'flex', gap: theme.space.xs, marginTop: theme.space.xs }}>
+                  <button onClick={fitClip} style={{ flex: 1, fontSize: 11 }} title="Contain: scale=1, centered">Fit</button>
+                  <button onClick={fillClip} style={{ flex: 1, fontSize: 11 }} title="Cover: zoom to fill frame with no bars">Fill</button>
+                </div>
+              )}
             </Section>
+
+            {clip.kind === 'media' && !isTitle(clip) && (
+              <Section title="Motion presets">
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: theme.space.xs }}>
+                  {([
+                    ['zoom-in',  'Zoom In'],
+                    ['zoom-out', 'Zoom Out'],
+                    ['pan-lr',   '← Pan →'],
+                    ['pan-rl',   '→ Pan ←']
+                  ] as const).map(([type, label]) => (
+                    <button
+                      key={type}
+                      onClick={() => applyKenBurns(type)}
+                      style={{ fontSize: 11, padding: '4px 0' }}
+                      title="Replaces all keyframes with a Ken Burns animation"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <p style={{ color: theme.color.textDim, fontSize: 10, margin: `${theme.space.xs}px 0 0` }}>
+                  Sets fill scale + start/end keyframes. Designed for landscape→portrait reframe.
+                </p>
+              </Section>
+            )}
 
             <Section title="Clip">
               <Row label="Duration">
@@ -304,6 +402,45 @@ function NumField({
         style={{ width: 90 }}
       />
     </Row>
+  )
+}
+
+function KfNumField({
+  label, value, onChange, step = 1, min, max, hasKf, onKf
+}: {
+  label: string; value: number; onChange: (v: number) => void
+  step?: number; min?: number; max?: number
+  hasKf?: boolean; onKf?: () => void
+}): JSX.Element {
+  return (
+    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.space.sm, fontSize: theme.font.size.md }}>
+      <span style={{ color: theme.color.textDim }}>{label}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        <input
+          type="number"
+          value={typeof value === 'number' && isFinite(value) ? parseFloat(value.toFixed(4)) : 0}
+          step={step}
+          min={min}
+          max={max}
+          onChange={(e) => onChange(Number(e.target.value))}
+          style={{ width: 78 }}
+        />
+        {onKf !== undefined && (
+          <button
+            onClick={onKf}
+            title="Add keyframe for this property at playhead"
+            style={{
+              fontSize: 11, padding: '1px 5px', lineHeight: 1.5,
+              color: hasKf ? '#ffaa33' : theme.color.textDim,
+              background: hasKf ? 'rgba(255,170,51,0.15)' : 'transparent',
+              borderColor: hasKf ? '#ffaa33' : theme.color.border
+            }}
+          >
+            ◆
+          </button>
+        )}
+      </div>
+    </label>
   )
 }
 

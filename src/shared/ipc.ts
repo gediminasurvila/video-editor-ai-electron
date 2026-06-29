@@ -15,7 +15,8 @@ export const IpcChannels = {
   exportDialog: 'export:dialog',
   exportSequence: 'export:run',
   mcpStatus: 'mcp:status',
-  transcribeMedia: 'media:transcribe'
+  transcribeMedia: 'media:transcribe',
+  transcodeForPreview: 'media:transcodeForPreview'
 } as const
 
 export interface TranscriptWord {

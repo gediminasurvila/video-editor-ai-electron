@@ -3,7 +3,7 @@ import { readFile, readdir, unlink, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { app, BrowserWindow, ipcMain, dialog, type WebContents } from 'electron'
 import { IpcChannels, IpcEvents, type RunCommandResponse, type TranscriptWord } from '@shared/ipc'
-import { probeMedia, generateThumbnails, extractAudio } from './ffmpeg/sidecar'
+import { probeMedia, generateThumbnails, extractAudio, transcodeForPreview } from './ffmpeg/sidecar'
 import { loadProject, saveProject } from './project/io'
 import { exportSequence } from './export/render'
 import { CommandBridge } from './mcp/bridge'
@@ -58,7 +58,11 @@ function registerIpc(): void {
 
   ipcMain.handle(IpcChannels.readMediaBytes, async (_e, filePath: string) => {
     const buf = await readFile(filePath)
-    // Return the underlying ArrayBuffer slice so it transfers as bytes.
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  })
+
+  ipcMain.handle(IpcChannels.transcodeForPreview, async (_e, filePath: string) => {
+    const buf = await transcodeForPreview(filePath)
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
   })
 

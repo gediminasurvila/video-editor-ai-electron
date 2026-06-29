@@ -86,7 +86,6 @@ export class Compositor {
 
     gl.enable(gl.BLEND)
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
   }
 
   /** Build the column-major 2D affine matrix for one layer. */

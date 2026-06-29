@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { theme } from '../../app/theme'
 import { useEditor, activeSequence } from '../../state/store'
 import { runCommand } from '../../commands'
@@ -6,30 +6,17 @@ import { importViaDialog } from '../../actions/quickActions'
 import { sequenceDuration } from '@shared/schema'
 import type { McpStatus } from '@shared/ipc'
 
-const SEQUENCE_PRESETS = [
-  { label: '1080p HD  30 fps', width: 1920, height: 1080, fps: 30 },
-  { label: '1080p HD  60 fps', width: 1920, height: 1080, fps: 60 },
-  { label: '4K UHD   30 fps', width: 3840, height: 2160, fps: 30 },
-  { label: 'Vertical 9:16  30 fps', width: 1080, height: 1920, fps: 30 }
+const RATIO_PILLS = [
+  { label: '16:9', w: 1920, h: 1080 },
+  { label: '9:16', w: 1080, h: 1920 },
+  { label: '1:1',  w: 1080, h: 1080 },
+  { label: '4:3',  w: 1440, h: 1080 }
 ] as const
 
-export function Toolbar({ onOpenSettings }: { onOpenSettings: () => void }): JSX.Element {
+export function Toolbar({ onOpenSettings, onNewSequence }: { onOpenSettings: () => void; onNewSequence: () => void }): JSX.Element {
   const { project, filePath, undo, redo, past, future, setProject } = useEditor()
   const [mcp, setMcp] = useState<McpStatus | null>(null)
   const [exporting, setExporting] = useState<string | null>(null)
-  const [presetOpen, setPresetOpen] = useState(false)
-  const presetRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!presetOpen) return
-    function onClickOutside(e: MouseEvent): void {
-      if (presetRef.current && !presetRef.current.contains(e.target as Node)) {
-        setPresetOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [presetOpen])
 
   const seq = activeSequence(project)
   const hasContent = !!seq && sequenceDuration(seq) > 0
@@ -38,18 +25,6 @@ export function Toolbar({ onOpenSettings }: { onOpenSettings: () => void }): JSX
     window.api.mcpStatus().then(setMcp)
     return window.api.onMcpStatusChanged(setMcp)
   }, [])
-
-  async function newSequenceFromPreset(preset: (typeof SEQUENCE_PRESETS)[number]): Promise<void> {
-    setPresetOpen(false)
-    await runCommand('create_sequence', {
-      name: preset.label,
-      width: preset.width,
-      height: preset.height,
-      fps: preset.fps
-    })
-    await runCommand('add_track', { type: 'video', name: 'Video 1' })
-    await runCommand('add_track', { type: 'audio', name: 'Audio 1' })
-  }
 
   async function open(): Promise<void> {
     const path = await window.api.openProjectDialog()
@@ -101,57 +76,35 @@ export function Toolbar({ onOpenSettings }: { onOpenSettings: () => void }): JSX
         + Import
       </button>
 
-      <div ref={presetRef} style={{ position: 'relative' }}>
-        <button onClick={() => setPresetOpen((o) => !o)} title="Create a new sequence">
-          + Sequence
-        </button>
-        {presetOpen && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              left: 0,
-              marginTop: 4,
-              background: theme.color.panel,
-              border: `1px solid ${theme.color.border}`,
-              borderRadius: theme.radius.md,
-              boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-              zIndex: 100,
-              minWidth: 200
-            }}
-          >
-            {SEQUENCE_PRESETS.map((p) => (
+      <button onClick={onNewSequence} title="Create a new sequence">
+        + Sequence
+      </button>
+
+      {seq && (
+        <>
+          <Sep />
+          <span style={{ fontSize: 10, color: theme.color.textDim, userSelect: 'none' }}>Ratio</span>
+          {RATIO_PILLS.map((p) => {
+            const active = seq.width === p.w && seq.height === p.h
+            return (
               <button
                 key={p.label}
-                onClick={() => void newSequenceFromPreset(p)}
+                onClick={() => void runCommand('set_project_settings', { width: p.w, height: p.h })}
+                title={`${p.w}×${p.h}`}
                 style={{
-                  display: 'block',
-                  width: '100%',
-                  textAlign: 'left',
-                  background: 'none',
-                  border: 'none',
-                  borderRadius: 0,
-                  padding: `${theme.space.sm}px ${theme.space.md}px`,
-                  cursor: 'pointer',
-                  fontSize: theme.font.size.sm,
-                  color: theme.color.text
+                  fontSize: 10,
+                  padding: '2px 7px',
+                  background: active ? theme.color.accentDim : 'transparent',
+                  borderColor: active ? theme.color.accent : theme.color.border,
+                  color: active ? '#fff' : theme.color.textDim
                 }}
-                onMouseEnter={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background = theme.color.panelAlt)
-                }
-                onMouseLeave={(e) =>
-                  ((e.currentTarget as HTMLElement).style.background = 'none')
-                }
               >
                 {p.label}
-                <span style={{ color: theme.color.textDim, fontSize: 10, marginLeft: 8 }}>
-                  {p.width}×{p.height}
-                </span>
               </button>
-            ))}
-          </div>
-        )}
-      </div>
+            )
+          })}
+        </>
+      )}
 
       <Sep />
       <button onClick={open} title="Open project">

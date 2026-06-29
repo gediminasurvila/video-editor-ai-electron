@@ -1,4 +1,4 @@
-import { clipDuration, type Clip, type MediaItem } from '@shared/schema'
+import { clipDuration, fillScale, type Clip, type MediaItem } from '@shared/schema'
 import { useEditor, activeSequence } from '../state/store'
 import { runCommand } from '../commands'
 
@@ -106,15 +106,27 @@ export async function addMediaToTimeline(
       keyframes: []
     }
 
-    primaryTrack.clips.push({
+    // Auto-fit: compute fill scale so the clip covers the sequence frame without bars.
+    // When aspect ratios match, fillScale returns 1 (no change).
+    const autoScale =
+      isVideo && seq.width > 0 && seq.height > 0 && media.width > 0 && media.height > 0
+        ? fillScale(media.width, media.height, seq.width, seq.height)
+        : 1
+
+    const fittedBase: Omit<Clip, 'id' | 'linkedClipId'> = {
       ...baseClip,
+      transform: { ...baseClip.transform, scale: autoScale }
+    }
+
+    primaryTrack.clips.push({
+      ...fittedBase,
       id: primaryClipId,
       linkedClipId: audioClipId ?? undefined
     })
 
     if (audioClipId && linkedTrack) {
       linkedTrack.clips.push({
-        ...baseClip,
+        ...fittedBase,
         id: audioClipId,
         linkedClipId: primaryClipId
       })

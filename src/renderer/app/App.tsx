@@ -8,6 +8,8 @@ import { Timeline } from '../panels/Timeline/Timeline'
 import { AgentChat } from '../panels/AgentChat/AgentChat'
 import { TranscriptPanel } from '../panels/Transcript/TranscriptPanel'
 import { SettingsModal } from '../panels/Settings/SettingsModal'
+import { NewProjectDialog } from '../panels/NewProject/NewProjectDialog'
+import { useEditor, activeSequence } from '../state/store'
 import { useShortcuts } from '../hooks/useShortcuts'
 import { importFiles } from '../actions/quickActions'
 
@@ -38,11 +40,18 @@ function loadLayout(): Layout {
 }
 
 export function App(): JSX.Element {
+  const project = useEditor((s) => s.project)
+  const seq = activeSequence(project)
+
   const [rightTab, setRightTab] = useState<RightTab>('inspector')
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [newProjectOpen, setNewProjectOpen] = useState(false)
   const [dropActive, setDropActive] = useState(false)
   const [layout, setLayout] = useState<Layout>(loadLayout)
   useShortcuts()
+
+  // Show dialog whenever there is no active sequence (e.g. fresh install or cleared project)
+  const showSetupDialog = !seq || newProjectOpen
 
   // Persist layout whenever it changes
   useEffect(() => {
@@ -79,8 +88,17 @@ export function App(): JSX.Element {
       onDragLeave={() => setDropActive(false)}
       onDrop={onDrop}
     >
-      <Toolbar onOpenSettings={() => setSettingsOpen(true)} />
+      <Toolbar
+        onOpenSettings={() => setSettingsOpen(true)}
+        onNewSequence={() => setNewProjectOpen(true)}
+      />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      {showSetupDialog && (
+        <NewProjectDialog
+          canClose={!!seq}
+          onDone={() => setNewProjectOpen(false)}
+        />
+      )}
 
       {/* Main workspace */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>

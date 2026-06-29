@@ -36,7 +36,7 @@ export class Engine {
     if (item.width === 0 && item.height === 0) return
     this.loading.add(item.id)
     window.api
-      .readMediaBytes(item.filePath)
+      .transcodeForPreview(item.filePath)
       .then((bytes) => DecodedMedia.load(bytes))
       .then((decoded) => {
         this.cache.set(item.id, decoded)

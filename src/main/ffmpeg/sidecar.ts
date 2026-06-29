@@ -1,10 +1,15 @@
 import { execFile, spawn } from 'node:child_process'
 import { promisify } from 'node:util'
+import { readFile, access } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import ffmpegStatic from 'ffmpeg-static'
 import ffprobeStatic from 'ffprobe-static'
 import type { ProbeResult } from '@shared/ipc'
 
 const execFileAsync = promisify(execFile)
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'tif'])
 
 /**
  * Resolve the ffmpeg/ffprobe binaries. We bundle them via ffmpeg-static /
@@ -59,7 +64,6 @@ export async function probeMedia(filePath: string): Promise<ProbeResult> {
 
   // Still images (png/jpg/webp/gif) probe as video streams with N/A duration.
   // Give them a 5-second default so they can be placed on the timeline.
-  const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'tiff', 'tif'])
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   const isImage = IMAGE_EXTS.has(ext)
   const duration = (Number.isFinite(rawDuration) && rawDuration > 0) ? rawDuration : (isImage ? 5 : 0)
@@ -150,6 +154,37 @@ export async function extractAudio(inputPath: string, outPath: string): Promise<
     'pcm_s16le',
     outPath
   ])
+}
+
+/** filePath → temp MP4 path; avoids re-transcoding across Engine reloads. */
+const previewCache = new Map<string, string>()
+
+async function fileExists(p: string): Promise<boolean> {
+  try { await access(p); return true } catch { return false }
+}
+
+/**
+ * Transcode any video/image to an H264 MP4 that WebCodecs can decode.
+ * Scales to ≤1280px wide (ultrafast preset). Result is cached in tmpdir.
+ */
+export async function transcodeForPreview(filePath: string): Promise<Buffer> {
+  const cached = previewCache.get(filePath)
+  if (cached && await fileExists(cached)) return readFile(cached)
+
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  const isImage = IMAGE_EXTS.has(ext)
+  const out = join(tmpdir(), `video-ai-preview-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`)
+  previewCache.set(filePath, out)
+
+  const scaleFilter = "scale='min(1280,iw)':-2,format=yuv420p"
+  const args = isImage
+    ? ['-y', '-loop', '1', '-i', filePath, '-c:v', 'libx264', '-preset', 'ultrafast',
+       '-crf', '18', '-vf', scaleFilter, '-t', '1', '-movflags', '+faststart', '-an', out]
+    : ['-y', '-i', filePath, '-c:v', 'libx264', '-preset', 'ultrafast',
+       '-crf', '23', '-vf', scaleFilter, '-movflags', '+faststart', '-an', out]
+
+  await execFileAsync(binary('ffmpeg'), args)
+  return readFile(out)
 }
 
 export async function runFfmpeg(args: string[], onProgress?: (line: string) => void): Promise<void> {

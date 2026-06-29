@@ -230,15 +230,17 @@ export function Timeline(): JSX.Element {
   }, [drag, pxPerSec])
 
   // ── Track reorder drag ────────────────────────────────────────────────────
-  function onTrackGripDown(e: React.MouseEvent, trackId: string, origIndex: number): void {
+  function onTrackHeaderPointerDown(e: React.PointerEvent, trackId: string, origIndex: number): void {
+    if ((e.target as HTMLElement).closest('button')) return  // let mute button click through
     e.preventDefault()
     e.stopPropagation()
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     setTrackDrag({ trackId, origIndex, targetIndex: origIndex, startY: e.clientY })
   }
 
   useEffect(() => {
     if (!trackDrag || !seq) return
-    const onMove = (e: MouseEvent): void => {
+    const onMove = (e: PointerEvent): void => {
       const dy = e.clientY - trackDrag.startY
       const delta = Math.round(dy / TRACK_HEIGHT)
       const target = Math.max(0, Math.min(seq.tracks.length - 1, trackDrag.origIndex + delta))
@@ -259,11 +261,11 @@ export function Timeline(): JSX.Element {
         return null
       })
     }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
     return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
     }
   }, [trackDrag, seq])
 
@@ -602,50 +604,34 @@ export function Timeline(): JSX.Element {
                 />
               )}
 
-              {/* Track header */}
+              {/* Track header — drag anywhere to reorder */}
                 <div
+                  onPointerDown={(e) => onTrackHeaderPointerDown(e, track.id, idx)}
                   onContextMenu={(e) => openTrackCtx(e, track)}
                   style={{
                     width: LABEL_WIDTH,
                     borderRight: `1px solid ${theme.color.border}`,
                     borderBottom: `1px solid ${theme.color.border}`,
                     background: trackDrag?.trackId === track.id
-                      ? theme.color.panelAlt
+                      ? theme.color.accentDim
                       : theme.color.panel,
                     position: 'sticky',
                     left: 0,
                     zIndex: 1,
                     display: 'flex',
                     alignItems: 'center',
-                    paddingLeft: 0,
                     gap: 0,
                     overflow: 'hidden',
-                    opacity: trackDrag?.trackId === track.id ? 0.6 : 1
+                    opacity: trackDrag?.trackId === track.id ? 0.5 : 1,
+                    cursor: trackDrag?.trackId === track.id ? 'grabbing' : 'grab',
+                    userSelect: 'none'
                   }}
+                  title="Drag to reorder track"
                 >
-                  {/* Drag grip */}
-                  <div
-                    onMouseDown={(e) => onTrackGripDown(e, track.id, idx)}
-                    style={{
-                      width: 12,
-                      alignSelf: 'stretch',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'grab',
-                      color: theme.color.border,
-                      fontSize: 10,
-                      flexShrink: 0,
-                      userSelect: 'none'
-                    }}
-                    title="Drag to reorder track"
-                  >
-                    ⠿
-                  </div>
                   {/* Colored track type strip */}
                   <div
                     style={{
-                      width: 3,
+                      width: 4,
                       alignSelf: 'stretch',
                       background: track.muted ? theme.color.border : trackColor,
                       flexShrink: 0
@@ -776,6 +762,26 @@ export function Timeline(): JSX.Element {
                             pxPerSec={pxPerSec}
                           />
                         )}
+                        {clip.keyframes.map((kf) => {
+                          const kfX = kf.time * pxPerSec
+                          if (kfX < 0 || kfX > widthPx) return null
+                          return (
+                            <div
+                              key={kf.time}
+                              style={{
+                                position: 'absolute',
+                                left: kfX,
+                                top: '50%',
+                                width: 6,
+                                height: 6,
+                                transform: 'translate(-50%, -50%) rotate(45deg)',
+                                background: '#ffaa33',
+                                pointerEvents: 'none',
+                                zIndex: 1
+                              }}
+                            />
+                          )
+                        })}
                         {clip.fadeIn > 0 && <FadeTri side="left" w={clip.fadeIn * pxPerSec} />}
                         {clip.fadeOut > 0 && <FadeTri side="right" w={clip.fadeOut * pxPerSec} />}
                         {clip.transition && (

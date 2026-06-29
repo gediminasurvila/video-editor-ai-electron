@@ -118,6 +118,22 @@ export function resolveTransform(clip: Clip, time: number): Transform {
   }
 }
 
+/** Contain-fit (drawW × drawH) for a frame (mw×mh) inside a canvas (seqW×seqH). */
+export function containFit(
+  mw: number, mh: number, seqW: number, seqH: number
+): { drawW: number; drawH: number } {
+  if (mw === 0 || mh === 0) return { drawW: seqW, drawH: seqH }
+  const fa = mw / mh
+  const sa = seqW / seqH
+  return fa > sa ? { drawW: seqW, drawH: seqW / fa } : { drawW: seqH * fa, drawH: seqH }
+}
+
+/** Scale that fills (covers) the canvas completely — no letterbox bars. */
+export function fillScale(mw: number, mh: number, seqW: number, seqH: number): number {
+  const { drawW, drawH } = containFit(mw, mh, seqW, seqH)
+  return Math.max(seqW / drawW, seqH / drawH)
+}
+
 /** Resolve effective volume for a clip at a given time. */
 export function resolveVolume(clip: Clip, time: number): number {
   const kfs = clip.keyframes.filter((k) => 'volume' in k)

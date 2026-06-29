@@ -12,6 +12,8 @@ const api = {
     ipcRenderer.invoke(IpcChannels.probeMedia, filePath),
   readMediaBytes: (filePath: string): Promise<ArrayBuffer> =>
     ipcRenderer.invoke(IpcChannels.readMediaBytes, filePath),
+  transcodeForPreview: (filePath: string): Promise<ArrayBuffer> =>
+    ipcRenderer.invoke(IpcChannels.transcodeForPreview, filePath),
   thumbnails: (filePath: string, duration: number, count: number, height: number): Promise<string[]> =>
     ipcRenderer.invoke(IpcChannels.thumbnails, filePath, duration, count, height),
 
